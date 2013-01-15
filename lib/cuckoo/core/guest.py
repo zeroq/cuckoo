@@ -202,6 +202,7 @@ class GuestManager:
             if abort.is_set() and self.interaction < 2:
                 ### JG: modified
                 log.error("%s: the analysis hit the critical timeout, aborted" % self.id)
+                break
 
             try:
                 status = self.server.get_status()

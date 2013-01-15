@@ -57,7 +57,11 @@ def add_file(file_path):
 def dump_file(file_path):
     """Create a copy of the give file path."""
     if os.path.exists(file_path):
-        sha256 = hashlib.sha256(open(file_path, "rb").read()).hexdigest()
+        ### JG: added try except because of permission denied
+        try:
+            sha256 = hashlib.sha256(open(file_path, "rb").read()).hexdigest()
+        except:
+            return
         if sha256 in DUMPED_LIST:
             # The file was already dumped, just skip.
             return
@@ -423,6 +427,8 @@ class Analyzer:
             else:
                 log.info("Automatically selected analysis package \"%s\""
                          % package)
+                ### JG: write package back to config
+                self.config.package = package
         # Otherwise just select the specified package.
         else:
             package = self.config.package
@@ -451,10 +457,15 @@ class Analyzer:
         # Initialize the analysis package.
         pack = package_class(self.get_options())
 
-        # Set the analysis timeout timer. When the timeout gets hit, we force
-        # the termination of the analysis.
-        timer = Timer(self.config.timeout, self.stop)
-        timer.start()
+        ### JG: disable timer if interactive command shell
+        if self.config.interaction != 0:
+            log.info("Disabling timer due to interactive command shell")
+            timer = None
+        else:
+            # Set the analysis timeout timer. When the timeout gets hit, we force
+            # the termination of the analysis.
+            timer = Timer(self.config.timeout, self.stop)
+            timer.start()
 
         # Initialize Auxiliary modules
         Auxiliary()
@@ -502,6 +513,14 @@ class Analyzer:
             raise CuckooError("The package \"%s\" start function encountered "
                               "an unhandled exception: %s" %(package_name, e))
 
+        ### JG: maintain intial pid(s) list in interactive modes and close monitoring if all of them are gone
+        initialPIDs = []
+        if pids:
+            if type(pids) == list:
+                initialPIDs = initialPIDs + pids
+            else:
+                initialPIDs.append(pids)
+
         # If the analysis package returned a list of process IDs, we add them
         # to the list of monitored processes and enable the process monitor.
         if pids:
@@ -539,6 +558,14 @@ class Analyzer:
                         if not Process(pid=pid).is_alive():
                             log.info("Process with pid %d has terminated" % pid)
                             PROCESS_LIST.remove(pid)
+                            log.info("%s" % (PROCESS_LIST))
+                            ### JG: in interactive mode check if an initial pid terminated
+                            if self.config.interaction != 0 and pid in initialPIDs:
+                                log.info("Interactive Mode: initial PID terminated -> terminating analysis ...")
+                                self.do_run = False
+                                if timer:
+                                    timer.cancel()
+                                break
 
                     # If none of the monitored processes are still alive, we
                     # can terminate the analysis.
@@ -546,7 +573,8 @@ class Analyzer:
                         log.info("Process list is empty, terminating "
                                  "analysis...")
                         # Therefore we cancel the timer.
-                        timer.cancel()
+                        if timer:
+                            timer.cancel()
                         break
 
                     # Update the list of monitored processes available to the
@@ -563,7 +591,8 @@ class Analyzer:
                         log.info("The analysis package requested the "
                                  "termination of the analysis...")
                         # We cancel the timer.
-                        timer.cancel()
+                        if timer:
+                            timer.cancel()
                         break
                 # If the check() function of the package raised some exception
                 # we don't care, we can still proceed with the analysis but we

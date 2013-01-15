@@ -462,7 +462,8 @@ class Database(object):
 
             session.query(Task).get(task_id).guest = guest
             session.commit()
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
+            print e
             session.rollback()
             return None
 

@@ -23,3 +23,23 @@ class JsonDump(Report):
             report.close()
         except (UnicodeError, TypeError, IOError) as e:
             raise CuckooReportError("Failed to generate JSON report: %s" % e)
+
+        ###JG: add splitted report
+        try:
+            reportFile = os.path.join(self.reports_path, "report.json")
+            if os.path.exists(reportFile):
+                report = codecs.open(reportFile, "r", "utf-8")
+                obj = json.load(report)
+                report.close()
+
+                dest = os.path.join(self.reports_path, "jsonparts")
+                if not os.path.exists(dest):
+                    os.makedirs(dest)
+
+                for k in obj.keys():
+                    partName = os.path.join(dest, k+'.json')
+                    fp = codecs.open(partName, 'w', "utf-8")
+                    json.dump(obj[k], fp)
+                    fp.close()
+        except (UnicodeError, TypeError, IOError) as e:
+            raise CuckooReportError("Failed to generate JSON partial reports: %s" % e)

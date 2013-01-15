@@ -241,6 +241,19 @@ class Task(Base):
                          server_default="pending",
                          nullable=False)
     sample_id = Column(Integer, ForeignKey("samples.id"), nullable=True)
+
+    ### JG: added interaction and internet
+    ###     interaction:
+    ###         0: automated analysis (default)
+    ###         1: interactive file analysis
+    ###         2: interactive command shell
+    ###         3: interactive url analysis
+    ###     internet:
+    ###         0: emulated internet (default)
+    ###         1: real internet via NAT
+    interaction = Column(Integer(), server_default="0", nullable=False)
+    internet =  Column(Integer(), server_default="0", nullable=False)
+
     sample = relationship("Sample", backref="tasks")
     guest = relationship("Guest", uselist=False, backref="tasks")
     errors = relationship("Error", backref="tasks")
@@ -438,6 +451,15 @@ class Database(object):
         guest = Guest(name, label, manager)
         guest.started_on = datetime.now()
         try:
+            ### JG: set machine name if it is not set
+            session.query(Task).get(task_id).machine = name
+            session.commit()
+            ### JG: delete already existing guest entry
+            if len(session.query(Guest).filter_by(task_id=task_id).all())>0:
+                test = session.query(Task).get(task_id).guest
+                if test.task_id == task_id and test.name == guest.name:
+                    session.delete(test)
+
             session.query(Task).get(task_id).guest = guest
             session.commit()
         except SQLAlchemyError:
@@ -566,6 +588,7 @@ class Database(object):
             session.rollback()
 
     # The following functions are mostly used by external utils.
+    ### JG: added interaction and internet parameters
 
     def add(self,
             obj,
@@ -577,7 +600,9 @@ class Database(object):
             machine=None,
             platform=None,
             memory=False,
-            enforce_timeout=False):
+            enforce_timeout=False,
+            interaction=0,
+            internet=0):
         """Add a task to database.
         @param file_path: sample path.
         @param timeout: selected timeout.
@@ -588,6 +613,8 @@ class Database(object):
         @param platform: platform.
         @param memory: toggle full memory dump.
         @param enforce_timeout: toggle full timeout execution.
+        @param interaction: toggle automated and interactive analysis mode
+        @param internet: toggle emulated or NATed internet
         @return: cursor or None.
         """
         session = self.Session()
@@ -628,6 +655,11 @@ class Database(object):
         task.platform = platform
         task.memory = memory
         task.enforce_timeout = enforce_timeout
+
+        ### JG: added interaction and internet
+        task.interaction = interaction
+        task.internet = internet
+
         session.add(task)
 
         try:
@@ -638,6 +670,7 @@ class Database(object):
 
         return task.id
 
+    ### JG: added interaction and internet parameters
     def add_path(self,
                  file_path,
                  timeout=0,
@@ -648,7 +681,9 @@ class Database(object):
                  machine=None,
                  platform=None,
                  memory=False,
-                 enforce_timeout=False):
+                 enforce_timeout=False,
+                 interaction=0,
+                 internet=0):
         """Add a task to database from file path.
         @param file_path: sample path.
         @param timeout: selected timeout.
@@ -659,6 +694,8 @@ class Database(object):
         @param platform: platform.
         @param memory: toggle full memory dump.
         @param enforce_timeout: toggle full timeout execution.
+        @param interaction: toggle automated and interactive analysis mode
+        @param internet: toggle emulated or NATed internet
         @return: cursor or None.
         """
         if not file_path or not os.path.exists(file_path):
@@ -673,8 +710,11 @@ class Database(object):
                         machine,
                         platform,
                         memory,
-                        enforce_timeout)
+                        enforce_timeout,
+                        interaction,
+                        internet)
 
+    ### JG: added interaction and internet parameters
     def add_url(self,
                 url,
                 timeout=0,
@@ -685,7 +725,9 @@ class Database(object):
                 machine=None,
                 platform=None,
                 memory=False,
-                enforce_timeout=False):
+                enforce_timeout=False,
+                interaction=0,
+                internet=0):
         """Add a task to database from url.
         @param url: url.
         @param timeout: selected timeout.
@@ -696,6 +738,8 @@ class Database(object):
         @param platform: platform.
         @param memory: toggle full memory dump.
         @param enforce_timeout: toggle full timeout execution.
+        @param interaction: toggle automated and interactive analysis mode
+        @param internet: toggle emulated or NATed internet
         @return: cursor or None.
         """
         return self.add(URL(url),
@@ -707,7 +751,9 @@ class Database(object):
                         machine,
                         platform,
                         memory,
-                        enforce_timeout)
+                        enforce_timeout,
+                        interaction,
+                        internet)
 
     def list_tasks(self, limit=None):
         """Retrieve list of task.

@@ -460,6 +460,16 @@ class Processing(object):
         """
         raise NotImplementedError
 
+    def set_interaction_mode(self, interaction=0):
+        """Set interaction mode,
+        @param interaction:
+            0 = automated analysis
+            1 = interactive file analysis
+            2 = interactive command shell
+        """
+        ### JG: added function to set interaction mode
+        self.interaction = interaction
+
 class Signature(object):
     """Base class for Cuckoo signatures."""
 
@@ -697,3 +707,13 @@ class Report(object):
         @raise NotImplementedError: this method is abstract.
         """
         raise NotImplementedError
+
+    def set_interaction_mode(self, interaction=0):
+        """Set interaction mode,
+        @param interaction:
+            0 = automated analysis
+            1 = interactive file analysis
+            2 = interactive command shell
+        """
+        ### JG: added function to set interaction mode
+        self.interaction = interaction

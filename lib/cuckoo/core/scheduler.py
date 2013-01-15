@@ -25,6 +25,11 @@ from lib.cuckoo.core.processor import Processor
 from lib.cuckoo.core.reporter import Reporter
 from lib.cuckoo.core.plugins import import_plugin, list_plugins
 
+### JG:
+import subprocess
+from lib.cuckoo.core.fakeDNS import fakeDNS
+from lib.cuckoo.core.netflow import Netflow
+
 log = logging.getLogger(__name__)
 
 mmanager = None
@@ -150,14 +155,22 @@ class AnalysisManager(Thread):
         options["enforce_timeout"] = self.task.enforce_timeout
         options["started"] = time.time()
 
+        ### JG: added interaction and internet options
+        options["interaction"] = int(self.task.interaction)
+        options["internet"] = int(self.task.internet)
+
         if not self.task.timeout or self.task.timeout == 0:
             options["timeout"] = self.cfg.timeouts.default
         else:
             options["timeout"] = self.task.timeout
 
-        if self.task.category == "file":
+        ### JG: added check for interaction mode
+        if self.task.category == "file" and options["interaction"] < 2:
             options["file_name"] = File(self.task.target).get_name()
             options["file_type"] = File(self.task.target).get_type()
+        else:
+            options["file_name"] = ""
+            options["file_type"] = ""
 
         return options
 
@@ -168,16 +181,19 @@ class AnalysisManager(Thread):
             for csv in os.listdir(logs_path):
                 csv = os.path.join(logs_path, csv)
                 if os.stat(csv).st_size > self.cfg.processing.analysis_size_limit:
-                    log.error("Analysis file %s is too big to be processed, "
-                              "analysis aborted. Process it manually with the "
-                              "provided utilities" % csv)
-                    return False
+                    ### JG: added check to reduce CSV file
+                    if not self.reduceCSV(csv):
+                        log.error("Analysis file %s is too big to be processed, "
+                                  "analysis aborted. Process it manually with the "
+                                  "provided utilities" % csv)
+                        return False
         except OSError as e:
             log.warning("Error accessing analysis logs (task=%d): %s"
                         % (self.task.id, e))
 
-        results = Processor(self.storage).run()
-        Reporter(self.storage).run(results)
+        ### JG: added interaction parameter
+        results = Processor(self.storage, self.task.interaction).run()
+        Reporter(self.storage, self.task.interaction).run(results)
 
         log.info("Task #%d: reports generation completed (path=%s)"
                  % (self.task.id, self.storage))
@@ -198,13 +214,18 @@ class AnalysisManager(Thread):
         if not self.init_storage():
             return False
 
-        if self.task.category == "file":
+        ### JG: added interaction
+        if self.task.category == "file" and self.task.interaction < 2:
             # Store a copy of the original file.
             if not self.store_file():
                 return False
 
         # Generate the analysis configuration file.
         options = self.build_options()
+
+        ### JG: added log output
+        if options['interaction'] > 0:
+            log.info("Starting analysis by interactive command shell or browser")
 
         # Acquire analysis machine.
         machine = self.acquire_machine()
@@ -215,6 +236,35 @@ class AnalysisManager(Thread):
             sniffer.start(interface=self.cfg.sniffer.interface,
                           host=machine.ip,
                           file_path=os.path.join(self.storage, "dump.pcap"))
+
+        ### JG: If enabled in the configuration, start the netflow probe instance.
+        if self.cfg.netflow.enabled:
+            fprobe = Netflow(self.cfg.netflow.generator, self.cfg.netflow.collector)
+            nflowPort = int(machine.ip.split('.')[-1])
+            fprobe.start(interface=self.cfg.sniffer.interface, dst=self.cfg.netflow.destination, dport=nflowPort, file_path=os.path.join(self.storage))
+        else:
+            fprobe = False
+
+        ### JG: If enabled in the configuration, start the fake DNS server.
+        if self.cfg.fakedns.enabled:
+            fdns = fakeDNS(self.cfg.fakedns.fakedns)
+            fdns.start(ip=self.cfg.fakedns.dnsip, withInternet=options["internet"])
+        else:
+            fdns = False
+
+        ### JG: check if NAT should be enabled
+        if options["internet"]:
+            try:
+                pargs = ['/usr/bin/sudo', '/opt/cuckoo/enable_nat.sh']
+                enableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            except (OSError, ValueError) as e:
+                log.error("Failed to enable NAT" % (e))
+        else:
+            try:
+                pargs = ['/usr/bin/sudo', '/opt/cuckoo/disable_nat.sh']
+                disableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            except (OSError, ValueError) as e:
+                log.error("Failed to disable NAT" % (e))
 
         try:
             # Mark the selected analysis machine in the database as started.
@@ -230,6 +280,19 @@ class AnalysisManager(Thread):
             # Stop the sniffer.
             if sniffer:
                 sniffer.stop()
+            ### JG: Stop netflow
+            if fprobe:
+                fprobe.stop()
+            ### JG: Stop fakeDNS
+            if fdns:
+                fdns.stop()
+            ### JG: Disable NAT
+            if options["internet"]:
+                try:
+                    pargs = ['/usr/bin/sudo', '/opt/cuckoo/disable_nat.sh']
+                    disableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                except (OSError, ValueError) as e:
+                    log.error("Failed to enable NAT: %s" % (e))
 
             return False
         else:
@@ -244,6 +307,19 @@ class AnalysisManager(Thread):
                 # Stop the sniffer.
                 if sniffer:
                     sniffer.stop()
+                ### JG: Stop netflow
+                if fprobe:
+                    fprobe.stop()
+                ### JG: Stop fakeDNS
+                if fdns:
+                    fdns.stop()
+                ### JG: Disable NAT
+                if options["internet"]:
+                    try:
+                        pargs = ['/usr/bin/sudo', '/opt/cuckoo/disable_nat.sh']
+                        disableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    except (OSError, ValueError) as e:
+                        log.error("Failed to enable NAT: %s" % (e))
 
                 return False
             else:
@@ -266,6 +342,19 @@ class AnalysisManager(Thread):
             # Stop the sniffer.
             if sniffer:
                 sniffer.stop()
+            ### JG: Stop netflow
+            if fprobe:
+                fprobe.stop()
+            ### JG: Stop fakeDNS
+            if fdns:
+                fdns.stop()
+            ### JG: Disable NAT
+            if options["internet"]:
+                try:
+                    pargs = ['/usr/bin/sudo', '/opt/cuckoo/disable_nat.sh']
+                    disableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                except (OSError, ValueError) as e:
+                    log.error("Failed to enable NAT: %s" % (e))
 
             # If the target is a file and the user enabled the option,
             # delete the original copy.
@@ -312,6 +401,28 @@ class AnalysisManager(Thread):
             self.process_results()
 
         return succeeded
+
+    def reduceCSV(self, csv):
+        """remove duplicate lines from CSV"""
+        ### JG: function added to remove duplicate lines from large CSVs
+        import copy
+        previousLine = ""
+        log.info("csv file %s too big, trying to remove duplicate lines ..." % (csv))
+        try:
+            with open(csv, 'r') as f, open(csv+'.red', 'w') as o:
+                for line in f:
+                    if line != previousLine: o.write(line)
+                    previousLine = copy.copy(line)
+            if os.stat(csv+'.red').st_size > self.cfg.cuckoo.processing.analysis_size_limit:
+                raise CuckooAnalysisError("Analysis file %s is too big to be processed. Analysis aborted. You can process it manually" % csv)
+            else:
+                os.rename(csv, csv+'.original')
+                os.rename(csv+'.red', csv)
+                log.info("csv log successfully reduced in size (%s)" % (csv))
+                return True
+        except:
+            return False
+        return False
 
     def run(self):
         """Run manager thread."""
@@ -376,6 +487,11 @@ class Scheduler:
         else:
             log.info("Loaded %s machine/s" % mmanager.machines().count())
 
+        ### JG: restore snapshots of all virtual machines
+        virtualMachinesList = mmanager.machines().all()
+        for vm in virtualMachinesList:
+            mmanager.restore_snapshot(vm.label)
+
     def stop(self):
         """Stop scheduler."""
         self.running = False
@@ -390,21 +506,31 @@ class Scheduler:
 
         # This loop runs forever.
         while self.running:
-            time.sleep(1)
+            ### JG: added try except to catch keyboard interrrupt and restore VMs
+            try:
+                time.sleep(1)
 
-            # If no machines are available, it's pointless to fetch for
-            # pending tasks. Loop over.
-            if mmanager.availables() == 0:
-                continue
+                # If no machines are available, it's pointless to fetch for
+                # pending tasks. Loop over.
+                if mmanager.availables() == 0:
+                    continue
 
-            # Fetch a pending analysis task.
-            task = self.db.fetch_and_process()
+                # Fetch a pending analysis task.
+                task = self.db.fetch_and_process()
 
-            if task:
-                log.debug("Processing task #%s" % task.id)
+                if task:
+                    log.debug("Processing task #%s" % task.id)
 
-                # Initialize the analysis manager.
-                analysis = AnalysisManager(task)
-                analysis.daemon = True
-                # Start.
-                analysis.start()
+                    # Initialize the analysis manager.
+                    analysis = AnalysisManager(task)
+                    analysis.daemon = True
+                    # Start.
+                    analysis.start()
+            except KeyboardInterrupt:
+                log.info("keyboard interrupt")
+                break
+        ### JG: restore snapshots of all virtual machines
+        virtualMachinesList = mmanager.machines().all()
+        for vm in virtualMachinesList:
+            mmanager.restore_snapshot(vm.label)
+        log.info("back for good ...")

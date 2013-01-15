@@ -25,12 +25,16 @@ class Reporter:
     Engine and pass it over to the reporting modules before executing them.
     """
 
-    def __init__(self, analysis_path, custom=""):
+    def __init__(self, analysis_path, custom="", interaction=0):
         """@param analysis_path: analysis folder path.
         @param custom: custom options.
         """
         self.analysis_path = analysis_path
         self.custom = custom
+
+        ### JG: added interaction variable
+        self.interaction = interaction
+
         self.cfg = Config(cfg=os.path.join(CUCKOO_ROOT,
                                            "conf",
                                            "reporting.conf"))
@@ -46,6 +50,9 @@ class Reporter:
         current.set_path(self.analysis_path)
         # Load the content of the analysis.conf file.
         current.cfg = Config(current.conf_path)
+
+        ### JG: added set interaction mode
+        current.set_interaction_mode(self.interaction)
 
         # Extract the module name.
         module_name = inspect.getmodule(current).__name__

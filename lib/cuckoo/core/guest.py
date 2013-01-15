@@ -33,6 +33,9 @@ class GuestManager:
         self.ip = ip
         self.platform = platform
 
+        ### JG: global interaction state
+        self.interaction = 0
+
         self.cfg = Config()
         self.timeout = self.cfg.timeouts.critical
         self.server = TimeoutServer("http://%s:%s" % (ip, CUCKOO_GUEST_PORT),
@@ -129,6 +132,14 @@ class GuestManager:
         log.info("Starting analysis on guest (id=%s, ip=%s)"
                  % (self.id, self.ip))
 
+        ### JG: modified file to start if interactive command shell requested
+        self.interaction = options["interaction"]
+        if options["interaction"] == 2:
+            options["file_name"] = options["target"]
+
+        ### JG: display analysis options
+        log.info("Analysis Options: %s" % (options))
+
         try:
             # Wait for the agent to respond. This is done to check the
             # availability of the agent and verify that it's ready to receive
@@ -138,10 +149,15 @@ class GuestManager:
             self.upload_analyzer()
             # Give the analysis options to the guest, so it can generate the
             # analysis.conf inside the guest.
-            self.server.add_config(options)
+
+            ### JG: added check if configuration file was successfully created
+            confResult = self.server.add_config(options)
+            if not confResult:
+                raise CuckooGuestError("failed creating analysis.conf on guest")
 
             # If the target of the analysis is a file, upload it to the guest.
-            if options["category"] == "file":
+            ### JG: added check for interaction mode (only automated and interactive file analysis)
+            if options["category"] == "file" and options["interaction"] < 2:
                 try:
                     file_data = open(options["target"], "rb").read()
                 except (IOError, OSError) as e:
@@ -183,9 +199,9 @@ class GuestManager:
             # If the analysis hits the critical timeout, just return straight
             # straight away and try to recover the analysis results from the
             # guest.
-            if abort.is_set():
-                raise CuckooGuestError("The analysis hit the critical timeout,"
-                                       " terminating")
+            if abort.is_set() and self.interaction < 2:
+                ### JG: modified
+                log.error("%s: the analysis hit the critical timeout, aborted" % self.id)
 
             try:
                 status = self.server.get_status()

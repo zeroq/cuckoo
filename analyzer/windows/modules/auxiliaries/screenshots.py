@@ -12,7 +12,7 @@ from lib.common.abstracts import Auxiliary
 from lib.api.screenshot import Screenshot
 
 log = logging.getLogger(__name__)
-SHOT_DELAY = 1
+SHOT_DELAY = 10
 
 class Screenshots(Auxiliary, Thread):
     """Take screenshots."""

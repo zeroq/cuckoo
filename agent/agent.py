@@ -109,13 +109,20 @@ class Agent:
         @return: operation status.
         """
         global ERROR_MESSAGE
-        root = self._get_root()
+        ### JG: added container because of error (config was written to dynamic directory)
+        root = self._get_root(container="cuckoo")
 
         if not root:
             return False
 
         if type(options) != dict:
             return False
+
+        ### JG: added interaction
+        if options["interaction"] < 1 or options["interaction"] > 4:
+            self.interaction = 0
+        else:
+            self.interaction = options["interaction"]
 
         config = ConfigParser.RawConfigParser()
         config.add_section("analysis")
@@ -173,6 +180,11 @@ class Agent:
 
         if not self.analyzer_path or not os.path.exists(self.analyzer_path):
             return False
+
+        ### JG: insert wait for interactive file analysis (wait for user to connect via VNC)
+        if self.interaction == 1:
+            raw_input("Interactive analysis process. Press enter to continue ...")
+            print("Continuing analysis.")
 
         try:
             proc = subprocess.Popen([sys.executable, self.analyzer_path],

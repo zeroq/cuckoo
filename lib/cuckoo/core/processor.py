@@ -21,9 +21,12 @@ class Processor:
     is then passed over the reporting engine.
     """
 
-    def __init__(self, analysis_path):
+    def __init__(self, analysis_path, interaction=0):
         """@param analysis_path: analysis folder path."""
         self.analysis_path = analysis_path
+
+        ### JG: added interaction variable
+        self.interaction = interaction
 
     def _run_processing(self, module):
         """Run a processing module.
@@ -38,6 +41,9 @@ class Processor:
         # Load the analysis.conf configuration file.
         current.cfg = Config(current.conf_path)
 
+        ### JG: added set interaction mode
+        current.set_interaction_mode(self.interaction)
+
         # If current processing module is disabled, skip it.
         if not current.enabled:
             return None
@@ -47,12 +53,17 @@ class Processor:
             # appended to the general results container.
             data = current.run()
 
-            log.debug("Executed processing module \"%s\" on analysis at \"%s\""
-                      % (current.__class__.__name__, self.analysis_path))
+            ### JG: allow to return nothing
+            if data != None:
+                log.debug("Executed processing module \"%s\" on analysis at \"%s\""
+                          % (current.__class__.__name__, self.analysis_path))
 
-            # If succeeded, return they module's key name and the data to be
-            # appended to it.
-            return {current.key : data}
+                # If succeeded, return they module's key name and the data to be
+                # appended to it.
+                return {current.key : data}
+            else:
+                log.info("Execution of processing module \"%s\" on analysis at \"%s\" provided no results"
+                          % (current.__class__.__name__, self.analysis_path))
         except CuckooProcessingError as e:
             log.warning("The processing module \"%s\" returned the following "
                         "error: %s" % (current.__class__.__name__, e))

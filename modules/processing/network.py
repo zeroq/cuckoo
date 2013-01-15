@@ -36,6 +36,11 @@ class Pcap:
         self.unique_domains = []
         # List containing all TCP packets.
         self.tcp_connections = []
+
+        ### JG: added tcp syn recording
+        # List containing TCP SYN packets.
+        self.tcp_syn_connections = []
+
         # List containing all UDP packets.
         self.udp_connections = []
         # List containing all HTTP requests.
@@ -375,6 +380,10 @@ class Pcap:
                         self._tcp_dissect(connection, tcp.data)
                         self.tcp_connections.append(connection)
                     else:
+                        ### JG: log tcp syn packets
+                        connection["sport"] = tcp.sport
+                        connection["dport"] = tcp.dport
+                        self.tcp_syn_connections.append(connection)
                         continue
                 elif ip.p == dpkt.ip.IP_PROTO_UDP:
                     udp = ip.data
@@ -400,6 +409,10 @@ class Pcap:
         self.results["hosts"] = self.unique_hosts
         self.results["domains"] = self.unique_domains
         self.results["tcp"] = self.tcp_connections
+
+        ### JG: tcp syn
+        self.results["tcp_syn"] = self.tcp_syn_connections
+
         self.results["udp"] = self.udp_connections
         self.results["http"] = self.http_requests
         self.results["dns"] = self.dns_requests

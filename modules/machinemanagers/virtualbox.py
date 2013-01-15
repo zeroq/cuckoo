@@ -185,3 +185,31 @@ class VirtualBox(MachineManager):
         except OSError as e:
             raise CuckooMachineError("VBoxManage failed to take a memory dump of the machine with label %s: %s"
                                      % (label, e))
+
+    ### JG: added extrac function to restore snapshots and if necessary first poweroff the machine
+    def restore_snapshot(self, label):
+        """Restore snapshot of virtual machine.
+        @param label: virtual machine name.
+        @raise CuckooMachineError: if unable to restore
+        """
+        log.debug('Trying to restore snapshot of virtual machine %s' % label)
+        try:
+            if subprocess.call([self.options.virtualbox.path, "snapshot", label, "restorecurrent"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE):
+                raise CuckooMachineError("VBoxManage exited with error restoring the machine's snapshot")
+        except:
+            try:
+                if subprocess.call([self.options.virtualbox.path, "controlvm", label, "poweroff"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE):
+                    raise CuckooMachineError("VBoxManage exited with error powering off the virtual machine")
+                self._wait_status(label, self.POWEROFF)
+                if subprocess.call([self.options.virtualbox.path, "snapshot", label, "restorecurrent"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE):
+                    raise CuckooMachineError("VBoxManage exited with error restoring the machine's snapshot")
+            except:
+                raise CuckooMachineError("VBoxManage failed restoring the machine")
+        self._wait_status(label, self.SAVED)
+        log.info('Virtual machine snapshot restored (%s)' % label)

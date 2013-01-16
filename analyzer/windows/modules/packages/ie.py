@@ -22,7 +22,7 @@ class IE(Package):
             raise CuckooPackageError("Unable to execute initial Internet Explorer process, analysis aborted")
 
         if not free and suspended:
-            p.inject()
+            p.inject(dll=os.path.join("dll", "cuckoomon.dll.ie"))
             p.resume()
             return p.pid
         else:

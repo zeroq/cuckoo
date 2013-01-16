@@ -255,13 +255,14 @@ class AnalysisManager(Thread):
         ### JG: check if NAT should be enabled
         if options["internet"]:
             try:
-                pargs = ['/usr/bin/sudo', '/opt/cuckoo/enable_nat.sh']
+                #pargs = ['/usr/bin/sudo', '/opt/cuckoo/enable_nat.sh']
+                pargs = ['/usr/bin/sudo', self.cfg.nat.enable]
                 enableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             except (OSError, ValueError) as e:
                 log.error("Failed to enable NAT" % (e))
         else:
             try:
-                pargs = ['/usr/bin/sudo', '/opt/cuckoo/disable_nat.sh']
+                pargs = ['/usr/bin/sudo', self.cfg.nat.disable]
                 disableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             except (OSError, ValueError) as e:
                 log.error("Failed to disable NAT" % (e))

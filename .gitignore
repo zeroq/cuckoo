@@ -19,3 +19,6 @@ storage/*
 ehthumbs.db
 Icon?
 Thumbs.db
+
+# Ignore Configuration
+conf/*

@@ -193,6 +193,8 @@ class GuestManager:
         timer.start()
         self.server._set_timeout(self.timeout)
 
+        ### JG: added Error Counter
+        errorCounter = 0
         while True:
             time.sleep(1)
 
@@ -208,7 +210,13 @@ class GuestManager:
                 status = self.server.get_status()
             except Exception as e:
                 log.debug("%s: error retrieving status: %s" % (self.id, e))
+                errorCounter += 1
                 continue
+
+            ### JG: check Error Counter
+            if errorCounter > 50:
+                log.error("%s: error counter reached critical value, aborting" % (self.id))
+                break
 
             # React according to the returned status.
             if status == CUCKOO_GUEST_COMPLETED:

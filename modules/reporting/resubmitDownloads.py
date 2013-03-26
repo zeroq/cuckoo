@@ -97,6 +97,7 @@ class resubmitDownloads(Report):
                 sha512Hash = hashlib.sha512(fileContent).hexdigest()
                 ### append to result list
                 sucessfullDownloads.append([filePath, fileSize, fileType, md5Hash, crc32Hash, sha1Hash, sha256Hash, sha512Hash])
+                log.info("download: %s successfull" % (uriList[0]))
             except StandardError as e:
                 log.warning("failed to download file (%s), %s" % (uriList[0], e))
                 continue
@@ -104,7 +105,8 @@ class resubmitDownloads(Report):
         if len(sucessfullDownloads)>0:
             try:
                 conn = sqlite3.connect('/opt/cuckoo/db/cuckoo.db')
-            except:
+            except StandardError as e:
+                log.warning("failed connecting to sqlite database! (%s)" % (e))
                 return None
             cur = conn.cursor()
             for item in sucessfullDownloads:

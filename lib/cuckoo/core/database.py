@@ -477,8 +477,10 @@ class Database(object):
         try:
             session.query(Guest).get(guest_id).shutdown_on = datetime.now()
             session.commit()
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
+            print e
             session.rollback()
+            return None
 
     def list_machines(self, locked=False):
         """Lists virtual machines.
@@ -508,9 +510,9 @@ class Database(object):
             elif name:
                 machine = session.query(Machine).filter(Machine.name == name).filter(Machine.locked == False).first()
             elif platform:
-                machine = session.query(Machine).filter(Machine.platform == platform).filter(Machine.locked == False).first()
+                machine = session.query(Machine).filter(Machine.platform == platform).filter(Machine.name != 'Cuckoo_Win7SP1').filter(Machine.locked == False).first()
             else:
-                machine = session.query(Machine).filter(Machine.locked == False).first()
+                machine = session.query(Machine).filter(Machine.name != 'Cuckoo_Win7SP1').filter(Machine.locked == False).first()
         except SQLAlchemyError:
                 return None
 

@@ -3,6 +3,8 @@ import logging
 from lib.cuckoo.common.objects import File
 from lib.cuckoo.common.abstracts import Processing
 
+log = logging.getLogger(__name__)
+
 class Strings(Processing):
     """Get printable characters from a file."""
 

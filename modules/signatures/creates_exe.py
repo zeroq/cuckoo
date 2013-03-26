@@ -13,5 +13,8 @@ class CreatesExe(Signature):
     minimum = "0.5"
 
     def run(self):
-        return self.check_file(pattern=".*\\.exe$",
-                               regex=True)
+        for file_path in self.results["behavior"]["summary"]["files"]:
+            if file_path.endswith(".exe") and file_path != "C:\\%s" % self.results["target"]["file"]["name"]:
+                self.data.append({"file_name" : file_path})
+                return True
+        return False

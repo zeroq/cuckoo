@@ -6,7 +6,7 @@ from lib.cuckoo.common.abstracts import Signature
 
 class CreatesExe(Signature):
     name = "creates_exe"
-    description = "Creates a Windows executable on the filesystem"
+    description = "Creates/Modifies/Reads a Windows executable on the filesystem"
     severity = 2
     categories = ["generic"]
     authors = ["Cuckoo Developers"]
@@ -14,7 +14,8 @@ class CreatesExe(Signature):
 
     def run(self):
         for file_path in self.results["behavior"]["summary"]["files"]:
-            if file_path.endswith(".exe") and file_path != "C:\\%s" % self.results["target"]["file"]["name"]:
+            if file_path.lower().endswith(".exe") and file_path.lower() != "c:\\%s" % self.results["target"]["file"]["name"].lower():
                 self.data.append({"file_name" : file_path})
-                return True
+        if len(self.data)>0:
+            return True
         return False

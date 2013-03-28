@@ -8,6 +8,7 @@ import json
 import sqlite3
 import logging
 import magic
+import time
 
 from lib.cuckoo.common.abstracts import Report
 from lib.cuckoo.common.objects import File
@@ -104,7 +105,7 @@ class resubmitDownloads(Report):
 
         if len(sucessfullDownloads)>0:
             try:
-                conn = sqlite3.connect('/opt/cuckoo/db/cuckoo.db')
+                conn = sqlite3.connect('/opt/git/cuckoo/db/cuckoo.db')
             except StandardError as e:
                 log.warning("failed connecting to sqlite database! (%s)" % (e))
                 return None

@@ -2,6 +2,7 @@
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
+import time
 import os
 import sys
 import struct
@@ -74,7 +75,7 @@ def dump_file(file_path):
     name = c_wchar_p()
     KERNEL32.GetFullPathNameW(file_path, 32 * 1024, path, byref(name))
     file_path = path.value
-    
+
     # Check if the path has a valid file name, otherwise it's a directory
     # and we should abort the dump.
     if name.value:
@@ -159,7 +160,7 @@ class PipeHandler(Thread):
             #elif not success or bytes_read.value == 0:
             #    if KERNEL32.GetLastError() == ERROR_BROKEN_PIPE:
             #        pass
-            
+
             break
 
         if data:
@@ -365,7 +366,7 @@ class Analyzer:
         # Here we parse such options and provide a dictionary that will be made
         # accessible to the analysis package.
         options = {}
-        if self.config.options:
+        if self.config.options and self.config.options!='None':
             try:
                 # Split the options by comma.
                 fields = self.config.options.strip().split(",")
@@ -461,11 +462,14 @@ class Analyzer:
         if self.config.interaction != 0:
             log.info("Disabling timer due to interactive command shell")
             timer = None
+            enableIEspawn = False
         else:
             # Set the analysis timeout timer. When the timeout gets hit, we force
             # the termination of the analysis.
             timer = Timer(self.config.timeout, self.stop)
             timer.start()
+            enableIEspawn = True
+            start_time = time.time()
 
         # Initialize Auxiliary modules
         Auxiliary()
@@ -540,6 +544,9 @@ class Analyzer:
             log.info("Enabled timeout enforce, running for the full timeout")
             pid_check = False
 
+        ### JG: flag that last minutes are running from reduced timer
+        wait_mode = False
+
         self.do_run = True
 
         while self.do_run:
@@ -551,6 +558,14 @@ class Analyzer:
                 continue
 
             try:
+                ### JG: check if IE should be spawned
+                if enableIEspawn:
+                    elapsed_time = time.time() - start_time
+                    if elapsed_time >= 30.0:
+                        log.info("spawning IE")
+                        p = Process()
+                        p.execute(path=os.path.join(os.getenv("ProgramFiles"), "Internet Explorer", "iexplore.exe"), args="\"http://www.google.de\"", suspended=False)
+                        enableIEspawn = False
                 # If the process monitor is enabled we start checking whether
                 # the monitored processes are still alive.
                 if pid_check:
@@ -565,17 +580,24 @@ class Analyzer:
                                 self.do_run = False
                                 if timer:
                                     timer.cancel()
+                                if ietimer:
+                                    ietimer.cancel()
                                 break
 
                     # If none of the monitored processes are still alive, we
                     # can terminate the analysis.
-                    if len(PROCESS_LIST) == 0:
+                    if len(PROCESS_LIST) == 0 and not wait_mode:
                         log.info("Process list is empty, terminating "
                                  "analysis...")
                         # Therefore we cancel the timer.
                         if timer:
-                            timer.cancel()
-                        break
+                            ### JG: set timer to one minute
+                            timer = Timer(60.0, self.stop)
+                            log.info("wait another 60 seconds if something happens ...")
+                            timer.start()
+                            wait_mode = True
+                            #timer.cancel()
+                        #break
 
                     # Update the list of monitored processes available to the
                     # analysis package. It could be used for internal operations
@@ -593,6 +615,8 @@ class Analyzer:
                         # We cancel the timer.
                         if timer:
                             timer.cancel()
+                        if ietimer:
+                            ietimer.cancel()
                         break
                 # If the check() function of the package raised some exception
                 # we don't care, we can still proceed with the analysis but we

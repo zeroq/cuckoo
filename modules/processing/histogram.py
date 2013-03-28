@@ -37,7 +37,7 @@ class Histogram(Processing):
                 num = struct.unpack('B', byte)[0]
                 bucket.append(num)
 
-            plt.hist(bucket, bins=range(0, 256), normed=0, facecolor='blue', alpha=0.8, log=True)
+            plt.hist(bucket, bins=range(0, 256), normed=0, facecolor='blue', edgecolor='black', alpha=0.8, log=True)
             plt.xlabel('Values')
             plt.ylabel('Frequency')
             plt.xlim(0, 255)

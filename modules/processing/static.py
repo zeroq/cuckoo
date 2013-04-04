@@ -4,6 +4,7 @@
 
 import os
 import sys
+import logging
 
 try:
     import magic
@@ -22,6 +23,8 @@ from lib.cuckoo.common.objects import File
 from lib.cuckoo.common.constants import CUCKOO_ROOT
 from lib.cuckoo.common.abstracts import Processing
 from lib.cuckoo.common.utils import convert_to_printable
+
+log = logging.getLogger(__name__)
 
 # Partially taken from http://malwarecookbook.googlecode.com/svn/trunk/3/8/pescanner.py
 
@@ -60,12 +63,14 @@ class PortableExecutable:
         @return: matched signatures or None.
         """
         if not self.pe:
+            log.warning("peutils no pe file given")
             return None
 
         try:
-            signatures = peutils.SignatureDatabase(os.path.join(CUCKOO_ROOT, "data", "peutils" , "UserDB.TXT"))
+            signatures = peutils.SignatureDatabase(os.path.join(CUCKOO_ROOT, "data", "peutils" , "userdb.txt"))
             return signatures.match(self.pe, ep_only = True)
-        except:
+        except StandardError as e:
+            log.warning("peutils signatures failed: %s" % (e))
             return None
 
     def _get_imported_symbols(self):
@@ -95,16 +100,16 @@ class PortableExecutable:
                     continue
 
         return imports
-    
+
     def _get_exported_symbols(self):
         """Gets exported symbols.
         @return: exported symbols dict or None.
         """
         if not self.pe:
             return None
-        
+
         exports = []
-        
+
         if hasattr(self.pe, "DIRECTORY_ENTRY_EXPORT"):
             for exported_symbol in self.pe.DIRECTORY_ENTRY_EXPORT.symbols:
                 symbol = {}
@@ -216,11 +221,13 @@ class PortableExecutable:
         @return: analysis results dict or None.
         """
         if not os.path.exists(self.file_path):
+            log.warning("static processing failed getting file: %s" % (self.file_path))
             return None
 
         try:
             self.pe = pefile.PE(self.file_path)
-        except pefile.PEFormatError:
+        except pefile.PEFormatError as e:
+            log.warning("pefile failed: %s" % (e))
             return None
 
         results = {}
@@ -236,7 +243,7 @@ class PortableExecutable:
 
 class Static(Processing):
     """Static analysis."""
-    
+
     def run(self):
         """Run analysis.
         @return: results dict.

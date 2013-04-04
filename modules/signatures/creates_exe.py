@@ -13,11 +13,14 @@ class CreatesExe(Signature):
     minimum = "0.5"
 
     def run(self):
-        for filedict in self.results["newsummary"]["filesystem"]["write"]:
-            file_path = filedict["filename"]
-            if file_path.lower().endswith(".exe"):
-                if {"file_name" : file_path} not in self.data:
-                    self.data.append({"file_name" : file_path})
+        try:
+            for filedict in self.results["newsummary"]["filesystem"]["write"]:
+       	        file_path = filedict["filename"]
+                if file_path.lower().endswith(".exe"):
+                    if {"file_name" : file_path} not in self.data:
+                        self.data.append({"file_name" : file_path})
+        except:
+            pass
         if len(self.data)>0:
             return True
         return False

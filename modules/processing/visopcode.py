@@ -35,7 +35,7 @@ class visopcode(Processing):
         try:
             pe = pefile.PE(self.file_path)
         except StandardError as e:
-			log.warning("no PE file, cannot create opcode graph: %s" % (e))
+            log.warning("no PE file, cannot create opcode graph: %s" % (e))
             return {}
 
         dbytes = 8
@@ -62,7 +62,9 @@ class visopcode(Processing):
                             bucket[opcode] += 1
                         except:
                             bucket[opcode] = 1
-                plt.plot(range(1, len(bucket)-1), bucket.values()[1:-1], label=section.Name.replace('\x00',''))
+                #plt.plot(range(1, len(bucket)-1), bucket.values()[1:-1], label=section.Name.replace('\x00',''))
+                plt.plot(range(0, len(bucket)), bucket.values(), label=section.Name.replace('\x00',''))
+            plt.yscale('log')
             plt.title('Opcode Distribution of Sections')
             plt.xlabel('Opcode')
             plt.ylabel('Frequency')

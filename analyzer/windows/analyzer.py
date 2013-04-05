@@ -580,8 +580,6 @@ class Analyzer:
                                 self.do_run = False
                                 if timer:
                                     timer.cancel()
-                                if ietimer:
-                                    ietimer.cancel()
                                 break
 
                     # If none of the monitored processes are still alive, we
@@ -615,8 +613,6 @@ class Analyzer:
                         # We cancel the timer.
                         if timer:
                             timer.cancel()
-                        if ietimer:
-                            ietimer.cancel()
                         break
                 # If the check() function of the package raised some exception
                 # we don't care, we can still proceed with the analysis but we

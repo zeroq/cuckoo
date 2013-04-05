@@ -1,14 +1,14 @@
-import os
-import logging
+import matplotlib
+matplotlib.use('Agg', warn=False)
+import matplotlib.pyplot as plt
+
 from lib.cuckoo.common.objects import File
 from lib.cuckoo.common.abstracts import Processing
-
+import os
 import sys
 import struct
+import logging
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +38,8 @@ class Histogram(Processing):
                 bucket.append(num)
 
             plt.hist(bucket, bins=range(0, 256), normed=0, facecolor='blue', edgecolor='black', alpha=0.8, log=True)
-            plt.xlabel('Values')
+            plt.title('Byte Histogram')
+            plt.xlabel('Byte Values')
             plt.ylabel('Frequency')
             plt.xlim(0, 255)
             plt.grid(True)

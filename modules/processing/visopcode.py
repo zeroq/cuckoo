@@ -39,6 +39,8 @@ class visopcode(Processing):
             return {}
 
         dbytes = 8
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
         try:
             for section in pe.sections:
                 data = section.get_data()
@@ -62,17 +64,17 @@ class visopcode(Processing):
                             bucket[opcode] += 1
                         except:
                             bucket[opcode] = 1
-                #plt.plot(range(1, len(bucket)-1), bucket.values()[1:-1], label=section.Name.replace('\x00',''))
-                plt.plot(range(0, len(bucket)), bucket.values(), label=section.Name.replace('\x00',''))
-            plt.yscale('log')
-            plt.title('Opcode Distribution of Sections')
-            plt.xlabel('Opcode')
-            plt.ylabel('Frequency')
-            plt.xlim(1, 254)
-            plt.grid(True)
-            plt.legend()
+                #ax.plot(range(1, len(bucket)-1), bucket.values()[1:-1], label=section.Name.replace('\x00',''))
+                ax.plot(range(0, len(bucket)), bucket.values(), label=section.Name.replace('\x00',''))
+            ax.set_yscale('log')
+            ax.set_title('Opcode Distribution of Sections')
+            ax.set_xlabel('Opcode')
+            ax.set_ylabel('Frequency')
+            ax.set_xlim(1, 254)
+            ax.grid(True)
+            ax.legend()
             pngPath = os.path.join(self.analysis_path, 'opcodedistr.png')
-            plt.savefig(pngPath)
+            fig.savefig(pngPath)
         except StandardError as e:
             log.warning("failed to create opcode visualization: %s" % (e))
             return {}

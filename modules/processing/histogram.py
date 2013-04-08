@@ -37,14 +37,17 @@ class Histogram(Processing):
                 num = struct.unpack('B', byte)[0]
                 bucket.append(num)
 
-            plt.hist(bucket, bins=range(0, 256), normed=0, facecolor='blue', edgecolor='black', alpha=0.8, log=True)
-            plt.title('Byte Histogram')
-            plt.xlabel('Byte Values')
-            plt.ylabel('Frequency')
-            plt.xlim(0, 255)
-            plt.grid(True)
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+
+            ax.hist(bucket, bins=range(0, 256), normed=0, facecolor='blue', edgecolor='black', alpha=0.8, log=True)
+            ax.set_title('Byte Histogram')
+            ax.set_xlabel('Byte Values')
+            ax.set_ylabel('Frequency')
+            ax.set_xlim(0, 255)
+            ax.grid(True)
             pngPath = os.path.join(self.analysis_path, 'histogram.png')
-            plt.savefig(pngPath)
+            fig.savefig(pngPath)
         except StandardError as e:
             log.warning("failed to create histogram: %s" % (e))
             return {}

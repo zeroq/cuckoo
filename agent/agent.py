@@ -27,7 +27,7 @@ ERROR_MESSAGE = ""
 
 class Agent:
     """Cuckoo agent, it runs inside guest."""
-    
+
     def __init__(self):
         self.system = platform.system().lower()
         self.analyzer_path = ""
@@ -109,11 +109,6 @@ class Agent:
         @return: operation status.
         """
         global ERROR_MESSAGE
-        ### JG: added container because of error (config was written to dynamic directory)
-        root = self._get_root(container="cuckoo")
-
-        if not root:
-            return False
 
         if type(options) != dict:
             return False
@@ -138,7 +133,7 @@ class Agent:
                 config.set("analysis", key, value)
 
             config_path = os.path.join(root, "analysis.conf")
-        
+
             with open(config_path, "wb") as config_file:
                 config.write(config_file)
         except Exception as e:
@@ -202,7 +197,7 @@ class Agent:
         """Complete analysis.
         @param success: success status.
         @param error: error status.
-        """ 
+        """
         global ERROR_MESSAGE
         global CURRENT_STATUS
 
@@ -229,7 +224,7 @@ class Agent:
         zip_file = ZipFile(zip_data, "w", ZIP_STORED)
 
         root_len = len(os.path.abspath(root))
-        
+
         for root, dirs, files in os.walk(root):
             archive_root = os.path.abspath(root)[root_len:]
             for name in files:
@@ -240,7 +235,7 @@ class Agent:
                     zip_file.write(path, archive_name)
                 except IOError as e:
                     continue
-        
+
         zip_file.close()
         data = xmlrpclib.Binary(zip_data.getvalue())
         zip_data.close()

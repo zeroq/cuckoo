@@ -1,4 +1,4 @@
-# Copyright (C) 2010-2012 Cuckoo Sandbox Developers.
+# Copyright (C) 2010-2013 Cuckoo Sandbox Developers.
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
@@ -10,9 +10,11 @@ from ctypes import *
 from shutil import copy
 
 from lib.common.defines import *
-from lib.common.paths import PATHS
+from lib.common.constants import PIPE, PATHS
 from lib.common.errors import get_error_string
 from lib.common.rand import random_string
+from lib.common.results import NetlogFile
+from lib.core.config import Config
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +33,7 @@ def randomize_dll(dll_path):
 
 class Process:
     """Windows process."""
+    first_process = True
 
     def __init__(self, pid=0, h_process=0, thread_id=0, h_thread=0):
         """@param pid: PID.
@@ -78,6 +81,21 @@ class Process:
             ret = True
         return ret
 
+    def close(self):
+        """Close any open handles.
+        @return: operation status.
+        """
+        ret = bool(self.h_process or self.h_thread)
+        NT_SUCCESS = lambda val: val >= 0
+
+        if self.h_process:
+            ret = NT_SUCCESS( KERNEL32.CloseHandle(self.h_process) )
+
+        if self.h_thread:
+            ret = NT_SUCCESS( KERNEL32.CloseHandle(self.h_thread) )
+
+        return ret
+
     def exit_code(self):
         """Get process exit code.
         @return: exit code value.
@@ -89,6 +107,37 @@ class Process:
         KERNEL32.GetExitCodeProcess(self.h_process, byref(exit_code))
 
         return exit_code.value
+
+    def get_filepath(self):
+        """Get process image file path.
+        @return: decoded file path.
+        """
+        if not self.h_process:
+            self.open()
+
+        NT_SUCCESS = lambda val: val >= 0
+
+        pbi = create_string_buffer(200)
+        size = c_int()
+
+        # Set return value to signed 32bit integer.
+        NTDLL.NtQueryInformationProcess.restype = c_int
+
+        ret = NTDLL.NtQueryInformationProcess(self.h_process,
+                                              27,
+                                              byref(pbi),
+                                              sizeof(pbi),
+                                              byref(size))
+
+        if NT_SUCCESS(ret) and size.value > 8:
+            try:
+                fbuf = pbi.raw[8:]
+                fbuf = fbuf[:fbuf.find('\0\0')+1]
+                return fbuf.decode('utf16', errors="ignore")
+            except:
+                return ""
+
+        return ""
 
     def is_alive(self):
         """Process is alive?
@@ -153,7 +202,7 @@ class Process:
                                           None,
                                           creation_flags,
                                           None,
-                                          None,
+                                          os.getenv("TEMP"),
                                           byref(startup_info),
                                           byref(process_info))
 
@@ -242,7 +291,7 @@ class Process:
         bytes_written = c_int(0)
         if not KERNEL32.WriteProcessMemory(self.h_process,
                                            arg,
-                                           dll + '\x00',
+                                           dll + "\x00",
                                            len(dll) + 1,
                                            byref(bytes_written)):
             log.error("WriteProcessMemory failed when injecting process "
@@ -253,6 +302,19 @@ class Process:
         kernel32_handle = KERNEL32.GetModuleHandleA("kernel32.dll")
         load_library = KERNEL32.GetProcAddress(kernel32_handle,
                                                "LoadLibraryA")
+
+        config_path = os.path.join(os.getenv("TEMP"), "%s.ini" % self.pid)
+        with open(config_path, "w") as config:
+            cfg = Config("analysis.conf")
+
+            config.write("host-ip={0}\n".format(cfg.ip))
+            config.write("host-port={0}\n".format(cfg.port))
+            config.write("pipe={0}\n".format(PIPE))
+            config.write("results={0}\n".format(PATHS["root"]))
+            config.write("analyzer={0}\n".format(os.getcwd()))
+            config.write("first-process={0}\n".format(Process.first_process))
+
+            Process.first_process = False
 
         if apc or self.suspended:
             log.info("Using QueueUserAPC injection")
@@ -269,13 +331,13 @@ class Process:
                 return False
             log.info("Successfully injected process with pid %d" % self.pid)
         else:
-            event_name = 'CuckooEvent%d' % self.pid
+            event_name = "CuckooEvent%d" % self.pid
             self.event_handle = KERNEL32.CreateEventA(None,
                                                       False,
                                                       False,
                                                       event_name)
             if not self.event_handle:
-                log.warning('Unable to create notify event..')
+                log.warning("Unable to create notify event..")
                 return False
 
             log.info("Using CreateRemoteThread injection")
@@ -301,7 +363,7 @@ class Process:
 
     def wait(self):
         if self.event_handle:
-            KERNEL32.WaitForSingleObject(self.event_handle, INFINITE)
+            KERNEL32.WaitForSingleObject(self.event_handle, 10000)
             KERNEL32.CloseHandle(self.event_handle)
             self.event_handle = None
         return True
@@ -331,8 +393,9 @@ class Process:
         if not os.path.exists(root):
             os.makedirs(root)
 
-        dump = open(os.path.join(root, "%s.dmp" % str(self.pid)), "wb")
-
+        # now upload to host from the StringIO
+        nf = NetlogFile("memory/%s.dmp" % str(self.pid))
+        
         while(mem < max_addr):
             mbi = MEMORY_BASIC_INFORMATION()
             count = c_ulong(0)
@@ -351,12 +414,12 @@ class Process:
                                               buf,
                                               mbi.RegionSize,
                                               byref(count)):
-                    dump.write(buf.raw)
+                    nf.sock.sendall(buf.raw)
                 mem += mbi.RegionSize
             else:
                 mem += page_size
 
-        dump.close()
+        nf.close()
 
         log.info("Memory dump of process with pid %d completed" % self.pid)
 

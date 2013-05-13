@@ -1,4 +1,4 @@
-# Copyright (C) 2010-2012 Cuckoo Sandbox Developers.
+# Copyright (C) 2010-2013 Cuckoo Sandbox Developers.
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
@@ -237,7 +237,7 @@ class PortableExecutable:
         results["pe_sections"] = self._get_sections()
         results["pe_resources"] = self._get_resources()
         results["pe_versioninfo"] = self._get_versioninfo()
-        results["imported_dll_count"] = len([x for x in results["pe_imports"] if "dll" in x and x['dll'] is not None ])
+        results["imported_dll_count"] = len([x for x in results["pe_imports"] if "dll" in x and x["dll"] is not None ])
 
         return results
 
@@ -252,9 +252,8 @@ class Static(Processing):
         static = {}
 
         if HAVE_PEFILE:
-            if self.cfg.analysis.category == "file":
-                if self.cfg.analysis.file_type:
-                    if "PE32" in self.cfg.analysis.file_type:
-                        static = PortableExecutable(self.file_path).run()
+            if self.task["category"] == "file":
+                if "PE32" in File(self.file_path).get_type():
+                    static = PortableExecutable(self.file_path).run()
 
         return static

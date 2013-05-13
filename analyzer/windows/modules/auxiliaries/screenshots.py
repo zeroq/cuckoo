@@ -1,14 +1,16 @@
-# Copyright (C) 2010-2012 Cuckoo Sandbox Developers.
+# Copyright (C) 2010-2013 Cuckoo Sandbox Developers.
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
 import os
 import time
 import logging
+import StringIO
 from threading import Thread
 
-from lib.common.paths import PATHS
+from lib.common.constants import PATHS
 from lib.common.abstracts import Auxiliary
+from lib.common.results import NetlogFile
 from lib.api.screenshot import Screenshot
 
 log = logging.getLogger(__name__)
@@ -37,18 +39,33 @@ class Screenshots(Auxiliary, Thread):
         img_last = None
 
         while self.do_run:
-            img_current = Screenshot().take()
+            time.sleep(SHOT_DELAY)
+
+            try:
+                img_current = Screenshot().take()
+            except IOError as e:
+                log.error("Cannot take screenshot: %s", e)
+                continue
 
             if img_last:
                 if Screenshot().equal(img_last, img_current):
-                    time.sleep(SHOT_DELAY)
                     continue
 
             img_counter += 1
-            save_at = os.path.join(PATHS["shots"], "%s.jpg" % str(img_counter).rjust(4, '0'))
-            img_current.save(save_at)
+
+            # workaround as PIL can't write to the socket file object :(
+            tmpio = StringIO.StringIO()
+            img_current.save(tmpio, format="JPEG")
+            tmpio.seek(0)
+
+            # now upload to host from the StringIO
+            nf = NetlogFile("shots/%s.jpg" % str(img_counter).rjust(4, "0"))
+            
+            for chunk in tmpio:
+                nf.sock.sendall(chunk)
+            
+            nf.close()
 
             img_last = img_current
-            time.sleep(SHOT_DELAY)
 
         return True

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2010-2012 Cuckoo Sandbox Developers.
+# Copyright (C) 2010-2013 Cuckoo Sandbox Developers.
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
@@ -16,7 +16,7 @@ except ImportError:
 sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), ".."))
 
 from lib.cuckoo.common.constants import CUCKOO_ROOT
-from lib.cuckoo.common.utils import store_temp_file
+from lib.cuckoo.common.utils import store_temp_file, delete_folder
 from lib.cuckoo.core.database import Database
 
 # Global DB pointer.
@@ -114,7 +114,8 @@ def tasks_list(limit=None):
     response = {}
 
     response["tasks"] = []
-    for row in db.list_tasks(limit).all():
+
+    for row in db.list_tasks(limit, details=True):
         task = row.to_dict()
         task["guest"] = {}
         if row.guest:
@@ -132,7 +133,7 @@ def tasks_list(limit=None):
 def tasks_view(task_id):
     response = {}
 
-    task = db.view_task(task_id)
+    task = db.view_task(task_id, details=True)
     if task:
         entry = task.to_dict()
         entry["guest"] = {}
@@ -144,6 +145,25 @@ def tasks_view(task_id):
             entry["errors"].append(error.message)
 
         response["task"] = entry
+    else:
+        return HTTPError(404, "Task not found")
+
+    return jsonize(response)
+
+@route("/tasks/delete/<task_id>", method="GET")
+def tasks_delete(task_id):
+    response = {}
+
+    task = db.view_task(task_id)
+    if task:
+        if task.status == "processing":
+            return HTTPError(500, "The task is currently being processed, cannot delete")
+
+        if db.delete_task(task_id):
+            delete_folder(os.path.join(CUCKOO_ROOT, "storage", "analyses", task_id))
+            response["status"] = "OK"
+        else:
+            return HTTPError(500, "An error occurred while trying to delete the task")
     else:
         return HTTPError(404, "Task not found")
 
@@ -184,9 +204,9 @@ def files_view(md5=None, sha256=None, sample_id=None):
     response = {}
 
     if md5:
-        sample = db.find_sample(md5=md5)[0]
+        sample = db.find_sample(md5=md5)
     elif sha256:
-        sample = db.find_sample(sha256=sha256)[0]
+        sample = db.find_sample(sha256=sha256)
     elif sample_id:
         sample = db.view_sample(sample_id)
     else:

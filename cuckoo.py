@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2010-2012 Cuckoo Sandbox Developers.
+# Copyright (C) 2010-2013 Cuckoo Sandbox Developers.
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
@@ -13,6 +13,7 @@ try:
     from lib.cuckoo.common.exceptions import CuckooCriticalError, CuckooDependencyError
     from lib.cuckoo.core.startup import *
     from lib.cuckoo.core.scheduler import Scheduler
+    from lib.cuckoo.core.resultserver import Resultserver
 except (CuckooDependencyError, ImportError) as e:
     sys.exit("ERROR: Missing dependency: %s" % e)
 
@@ -49,6 +50,8 @@ def main():
         log.setLevel(logging.DEBUG)
 
     init_modules()
+
+    Resultserver()
 
     try:
         sched = Scheduler()

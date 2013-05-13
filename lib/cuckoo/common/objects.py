@@ -1,4 +1,4 @@
-# Copyright (C) 2010-2012 Cuckoo Sandbox Developers.
+# Copyright (C) 2010-2013 Cuckoo Sandbox Developers.
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
@@ -20,7 +20,14 @@ try:
 except ImportError:
     HAVE_SSDEEP = False
 
+try:
+    import yara
+    HAVE_YARA = True
+except ImportError:
+    HAVE_YARA = False
+
 from lib.cuckoo.common.utils import convert_to_printable
+from lib.cuckoo.common.constants import CUCKOO_ROOT
 
 log = logging.getLogger(__name__)
 
@@ -45,10 +52,9 @@ class URL:
 class File:
     """Basic file object class with all useful utilities."""
 
-    def __init__(self, file_path, strip_name=False):
+    def __init__(self, file_path):
         """@param file_path: file path."""
         self.file_path = file_path
-        self.strip_name = strip_name
 
         # these will be populated when first accessed
         self._file_data = None
@@ -62,11 +68,7 @@ class File:
         """Get file name.
         @return: file name.
         """
-        if self.strip_name:
-            file_name = os.path.basename(self.file_path.rstrip(".bin"))
-        else:
-            file_name = os.path.basename(self.file_path)
-
+        file_name = os.path.basename(self.file_path)
         return file_name
 
     def valid(self):
@@ -105,7 +107,7 @@ class File:
             sha256.update(chunk)
             sha512.update(chunk)
 
-        self._crc32     = ''.join('%02X'% ((crc>>i)&0xff) for i in [24, 16, 8, 0])
+        self._crc32     = "".join("%02X" % ((crc>>i)&0xff) for i in [24, 16, 8, 0])
         self._md5       = md5.hexdigest()
         self._sha1      = sha1.hexdigest()
         self._sha256    = sha256.hexdigest()
@@ -185,13 +187,13 @@ class File:
             except:
                 try:
                     import subprocess
-                    file_process = subprocess.Popen(['file',
-                                                     '-b',
+                    file_process = subprocess.Popen(["file",
+                                                     "-b",
                                                      self.file_path],
                                                     stdout = subprocess.PIPE)
                     file_type = file_process.stdout.read().strip()
                 except:
-                    return None
+                    return ""
         finally:
             try:
                 ms.close()
@@ -200,12 +202,45 @@ class File:
 
         return file_type
 
+    def get_yara(self, rulepath=os.path.join(CUCKOO_ROOT, "data", "yara", "index.yar")):
+        """Get Yara signatures matches.
+        @return: matched Yara signatures.
+        """
+        matches = []
+
+        if HAVE_YARA:
+            try:
+                rules = yara.compile(rulepath)
+
+                for match in rules.match(self.file_path):
+                    strings = []
+                    for s in match.strings:
+                        # Beware, spaghetti code ahead.
+                        try:
+                            new = s[2].encode("utf-8")
+                        except UnicodeDecodeError:
+                            s = s[2].lstrip("uU").encode("hex").upper()
+                            s = " ".join(s[i:i+2] for i in range(0, len(s), 2))
+                            new = "{ %s }" % s
+
+                        if new not in strings:
+                            strings.append(new)
+
+                    matches.append({"name" : match.rule,
+                                    "meta" : match.meta,
+                                    "strings" : strings})
+            except yara.Error as e:
+                log.warning("Unable to match Yara signatures: %s", e)
+
+        return matches
+
     def get_all(self):
         """Get all information available.
         @return: information dict.
         """
         infos = {}
         infos["name"] = self.get_name()
+        infos["path"] = self.file_path
         infos["size"] = self.get_size()
         infos["crc32"] = self.get_crc32()
         infos["md5"] = self.get_md5()
@@ -214,21 +249,6 @@ class File:
         infos["sha512"] = self.get_sha512()
         infos["ssdeep"] = self.get_ssdeep()
         infos["type"] = self.get_type()
+        infos["yara"] = self.get_yara()
 
         return infos
-
-
-class LocalDict(dict):
-    """Dictionary with local-only mutable slots.
-    Useful for reporting / signatures which try to change
-    our precious result data structure.
-    """
-
-    def __getitem__(self, attr):
-        r = dict.__getitem__(self, attr)
-        if isinstance(r, dict):
-            n = LocalDict(r)
-            self[attr] = n
-            return n
-        return r
-

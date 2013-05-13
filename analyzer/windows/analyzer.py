@@ -12,6 +12,7 @@ import pkgutil
 import logging
 import hashlib
 import xmlrpclib
+import time
 from ctypes import *
 from threading import Lock, Thread
 
@@ -607,16 +608,17 @@ class Analyzer:
 
                     # If none of the monitored processes are still alive, we
                     # can terminate the analysis.
-                    if len(PROCESS_LIST) == 0 and not wait_mode:
+                    if len(PROCESS_LIST) == 0:
                         log.info("Process list is empty, terminating analysis...")
+                        break
                         ### JG: set timer to one minute
-                        wait_mode = True
-                        if int(self.config.timeout)>60:
-                            time_counter = int(self.config.timeout)-60
-                            log.info("wait another 60 seconds if something happens ...")
-                        else:
-                            ### not enough time configured
-                            break
+                        #wait_mode = True
+                        #if int(self.config.timeout)>60:
+                        #    time_counter = int(self.config.timeout)-60
+                        #    log.info("wait another 60 seconds if something happens ...")
+                        #else:
+                        #    ### not enough time configured
+                        #    break
 
                     # Update the list of monitored processes available to the
                     # analysis package. It could be used for internal operations

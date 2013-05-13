@@ -393,7 +393,8 @@ class Database(object):
         session = self.Session()
         try:
             row = session.query(Task).filter(Task.status == "pending").order_by("priority desc, added_on").first()
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
+            print e
             return None
         finally:
             session.expunge(row)
@@ -421,7 +422,8 @@ class Database(object):
                 return None
             session.commit()
             session.refresh(row)
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
+            print e
             session.rollback()
             return None
         finally:

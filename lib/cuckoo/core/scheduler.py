@@ -456,7 +456,7 @@ class Scheduler:
             log.info("Loaded %s machine/s", len(mmanager.machines()))
 
         ### JG: restore snapshots of all virtual machines
-        virtualMachinesList = mmanager.machines().all()
+        virtualMachinesList = mmanager.machines()
         for vm in virtualMachinesList:
             mmanager.restore_snapshot(vm.label)
 
@@ -508,7 +508,7 @@ class Scheduler:
                 log.info("keyboard interrupt")
                 break
         ### JG: restore snapshots of all virtual machines
-        virtualMachinesList = mmanager.machines().all()
+        virtualMachinesList = mmanager.machines()
         for vm in virtualMachinesList:
             mmanager.restore_snapshot(vm.label)
         log.info("back for good ...")

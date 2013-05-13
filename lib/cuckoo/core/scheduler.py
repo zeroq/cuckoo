@@ -393,6 +393,28 @@ class AnalysisManager(Thread):
 
         return True
 
+    def reduceCSV(self, csv):
+        """remove duplicate lines from CSV"""
+        ### JG: function added to remove duplicate lines from large CSVs
+        import copy
+        previousLine = ""
+        log.info("csv file %s too big, trying to remove duplicate lines ..." % (csv))
+        try:
+            with open(csv, 'r') as f, open(csv+'.red', 'w') as o:
+                for line in f:
+                    if line != previousLine: o.write(line)
+                    previousLine = copy.copy(line)
+            if os.stat(csv+'.red').st_size > self.cfg.cuckoo.processing.analysis_size_limit:
+                raise CuckooAnalysisError("Analysis file %s is too big to be processed. Analysis aborted. You can process it manually" % csv)
+            else:
+                os.rename(csv, csv+'.original')
+                os.rename(csv+'.red', csv)
+                log.info("csv log successfully reduced in size (%s)" % (csv))
+                return True
+        except:
+            return False
+        return False
+
     def run(self):
         """Run manager thread."""
         success = self.launch_analysis()

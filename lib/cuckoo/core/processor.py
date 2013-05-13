@@ -1,14 +1,17 @@
-# Copyright (C) 2010-2012 Cuckoo Sandbox Developers.
+# Copyright (C) 2010-2013 Cuckoo Sandbox Developers.
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
+import os
 import logging
+import inspect
 from distutils.version import StrictVersion
 
+from lib.cuckoo.common.constants import CUCKOO_ROOT, CUCKOO_VERSION
 from lib.cuckoo.common.config import Config
-from lib.cuckoo.common.objects import LocalDict
-from lib.cuckoo.common.constants import CUCKOO_VERSION
 from lib.cuckoo.common.exceptions import CuckooProcessingError
+from lib.cuckoo.common.exceptions import CuckooOperationalError
+from lib.cuckoo.core.database import Database
 from lib.cuckoo.core.plugins import list_plugins
 
 log = logging.getLogger(__name__)
@@ -21,9 +24,16 @@ class Processor:
     is then passed over the reporting engine.
     """
 
-    def __init__(self, analysis_path, interaction=0):
-        """@param analysis_path: analysis folder path."""
-        self.analysis_path = analysis_path
+    def __init__(self, task_id, interaction=0):
+        """@param task_id: ID of the analyses to process."""
+        self.task = Database().view_task(task_id).to_dict()
+        self.analysis_path = os.path.join(CUCKOO_ROOT,
+                                          "storage",
+                                          "analyses",
+                                          str(task_id))
+        self.cfg = Config(cfg=os.path.join(CUCKOO_ROOT,
+                                           "conf",
+                                           "processing.conf"))
 
         ### JG: added interaction variable
         self.interaction = interaction
@@ -36,17 +46,32 @@ class Processor:
         """
         # Initialize the specified processing module.
         current = module()
-        # Provide it the path to the analysis results.
+
+        # Extract the module name.
+        module_name = inspect.getmodule(current).__name__
+        if "." in module_name:
+            module_name = module_name.rsplit(".", 1)[1]
+
+        try:
+            options = self.cfg.get(module_name)
+        except CuckooOperationalError:
+            log.debug("Processing module %s not found in "
+                      "configuration file", module_name)
+            return None
+
+        # If the processing module is disabled in the config, skip it.
+        if not options.enabled:
+            return None
+
+        # Give it path to the analysis results.
         current.set_path(self.analysis_path)
-        # Load the analysis.conf configuration file.
-        current.cfg = Config(current.conf_path)
+        # Give it the analysis task object.
+        current.set_task(self.task)
+        # Give it the options from the relevant processing.conf section.
+        current.set_options(options)
 
         ### JG: added set interaction mode
         current.set_interaction_mode(self.interaction)
-
-        # If current processing module is disabled, skip it.
-        if not current.enabled:
-            return None
 
         try:
             # Run the processing module and retrieve the generated data to be
@@ -55,21 +80,20 @@ class Processor:
 
             ### JG: allow to return nothing
             if data != None:
-                log.debug("Executed processing module \"%s\" on analysis at \"%s\""
-                          % (current.__class__.__name__, self.analysis_path))
-
+                log.debug("Executed processing module \"%s\" on analysis at \"%s\"",
+                          current.__class__.__name__, self.analysis_path)
                 # If succeeded, return they module's key name and the data to be
                 # appended to it.
                 return {current.key : data}
             else:
                 log.info("Execution of processing module \"%s\" on analysis at \"%s\" provided no results"
-                          % (current.__class__.__name__, self.analysis_path))
+                        % (current.__class__.__name__, self.analysis_path))
         except CuckooProcessingError as e:
             log.warning("The processing module \"%s\" returned the following "
-                        "error: %s" % (current.__class__.__name__, e))
+                        "error: %s", current.__class__.__name__, e)
         except Exception as e:
-            log.exception("Failed to run the processing module \"%s\":"
-                          % (current.__class__.__name__))
+            log.exception("Failed to run the processing module \"%s\":",
+                          current.__class__.__name__)
 
         return None
 
@@ -80,9 +104,9 @@ class Processor:
         @return: matched signature.
         """
         # Initialize the current signature.
-        current = signature(LocalDict(results))
+        current = signature(results)
 
-        log.debug("Running signature \"%s\"" % current.name)
+        log.debug("Running signature \"%s\"", current.name)
 
         # If the signature is disabled, skip it.
         if not current.enabled:
@@ -102,12 +126,10 @@ class Processor:
                 if StrictVersion(version) < StrictVersion(current.minimum.split("-")[0]):
                     log.debug("You are running an older incompatible version "
                               "of Cuckoo, the signature \"%s\" requires "
-                              "minimum version %s"
-                              % (current.name, current.minimum))
+                              "minimum version %s", current.name, current.minimum)
                     return None
             except ValueError:
-                log.debug("Wrong minor version number in signature %s"
-                          % current.name)
+                log.debug("Wrong minor version number in signature %s", current.name)
                 return None
 
         # If provided, check the maximum working Cuckoo version for this
@@ -119,12 +141,10 @@ class Processor:
                 if StrictVersion(version) > StrictVersion(current.maximum.split("-")[0]):
                     log.debug("You are running a newer incompatible version "
                               "of Cuckoo, the signature \"%s\" requires "
-                              "maximum version %s"
-                              % (current.name, current.maximum))
+                              "maximum version %s", current.name, current.maximum)
                     return None
             except ValueError:
-                log.debug("Wrong major version number in signature %s"
-                          % current.name)
+                log.debug("Wrong major version number in signature %s", current.name)
                 return None
 
         try:
@@ -136,15 +156,16 @@ class Processor:
                            "severity" : current.severity,
                            "references" : current.references,
                            "data" : current.data,
-                           "alert" : current.alert}
+                           "alert" : current.alert,
+                           "families": current.families}
 
-                log.debug("Analysis at \"%s\" matched signature \"%s\""
-                          % (self.analysis_path, current.name))
+                log.debug("Analysis at \"%s\" matched signature \"%s\"",
+                          self.analysis_path, current.name)
 
                 # Return information on the matched signature.
                 return matched
         except Exception as e:
-            log.exception("Failed to run signature \"%s\":" % (current.name))
+            log.exception("Failed to run signature \"%s\":", current.name)
 
         return None
 
@@ -164,6 +185,12 @@ class Processor:
         # If none is specified for the modules, they are selected in
         # alphabetical order.
         modules_list = list_plugins(group="processing")
+
+        # If no modules are loaded, return an empty dictionary.
+        if not modules_list:
+            log.debug("No processing modules loaded")
+            return results
+
         modules_list.sort(key=lambda module: module.order)
 
         # Run every loaded processing module.

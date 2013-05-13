@@ -1,4 +1,4 @@
-# Copyright (C) 2010-2012 Cuckoo Sandbox Developers.
+# Copyright (C) 2010-2013 Cuckoo Sandbox Developers.
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
@@ -19,7 +19,7 @@ try:
     from sqlalchemy import create_engine, Column
     from sqlalchemy import Integer, String, Boolean, DateTime, Enum
     from sqlalchemy import ForeignKey, Text, Index
-    from sqlalchemy.orm import sessionmaker, relationship
+    from sqlalchemy.orm import sessionmaker, relationship, joinedload
     from sqlalchemy.sql import func
     from sqlalchemy.ext.declarative import declarative_base
     from sqlalchemy.exc import SQLAlchemyError, IntegrityError
@@ -84,11 +84,11 @@ class Guest(Base):
     label = Column(String(255), nullable=False)
     manager = Column(String(255), nullable=False)
     started_on = Column(DateTime(timezone=False),
-                        default=datetime.now(),
+                        default=datetime.now,
                         nullable=False)
     shutdown_on = Column(DateTime(timezone=False), nullable=True)
     task_id = Column(Integer,
-                     ForeignKey('tasks.id'),
+                     ForeignKey("tasks.id"),
                      nullable=False,
                      unique=True)
 
@@ -186,7 +186,7 @@ class Error(Base):
     id = Column(Integer(), primary_key=True)
     message = Column(String(255), nullable=False)
     task_id = Column(Integer,
-                     ForeignKey('tasks.id'),
+                     ForeignKey("tasks.id"),
                      nullable=False,
                      unique=True)
 
@@ -230,8 +230,9 @@ class Task(Base):
     memory = Column(Boolean, nullable=False, default=False)
     enforce_timeout = Column(Boolean, nullable=False, default=False)
     added_on = Column(DateTime(timezone=False),
-                      default=datetime.now(),
+                      default=datetime.now,
                       nullable=False)
+    started_on = Column(DateTime(timezone=False), nullable=True)
     completed_on = Column(DateTime(timezone=False), nullable=True)
     status = Column(Enum("pending",
                          "processing",
@@ -255,8 +256,8 @@ class Task(Base):
     internet =  Column(Integer(), server_default="0", nullable=False)
 
     sample = relationship("Sample", backref="tasks")
-    guest = relationship("Guest", uselist=False, backref="tasks")
-    errors = relationship("Error", backref="tasks")
+    guest = relationship("Guest", uselist=False, backref="tasks", cascade="save-update, delete")
+    errors = relationship("Error", backref="tasks", cascade="save-update, delete")
 
     def to_dict(self):
         """Converts object to dict.
@@ -340,6 +341,8 @@ class Database(object):
             session.commit()
         except SQLAlchemyError:
             session.rollback()
+        finally:
+            session.close()
 
     def _set_status(self, task_id, status):
         """Set task status.
@@ -354,6 +357,8 @@ class Database(object):
         except SQLAlchemyError:
             session.rollback()
             return False
+        finally:
+            session.close()
 
         return True
 
@@ -378,6 +383,8 @@ class Database(object):
             session.commit()
         except SQLAlchemyError:
             session.rollback()
+        finally:
+            session.close()
 
     def fetch(self):
         """Fetch a task.
@@ -388,6 +395,9 @@ class Database(object):
             row = session.query(Task).filter(Task.status == "pending").order_by("priority desc, added_on").first()
         except SQLAlchemyError:
             return None
+        finally:
+            session.expunge(row)
+            session.close()
         return row
 
     def process(self, task_id):
@@ -405,11 +415,17 @@ class Database(object):
         try:
             row = session.query(Task).filter(Task.status == "pending").order_by("priority desc, added_on").first()
             if row:
-               row.status = "processing"
+                row.status = "processing"
+                row.started_on = datetime.now()
+            else:
+                return None
             session.commit()
+            session.refresh(row)
         except SQLAlchemyError:
             session.rollback()
             return None
+        finally:
+            session.close()
         return row
 
     def complete(self, task_id, success=True):
@@ -422,6 +438,7 @@ class Database(object):
         try:
             task = session.query(Task).get(task_id)
         except SQLAlchemyError:
+            session.close()
             return False
 
         if success:
@@ -436,6 +453,8 @@ class Database(object):
         except SQLAlchemyError:
             session.rollback()
             return False
+        finally:
+            session.close()
 
         return True
 
@@ -449,7 +468,6 @@ class Database(object):
         """
         session = self.Session()
         guest = Guest(name, label, manager)
-        guest.started_on = datetime.now()
         try:
             ### JG: set machine name if it is not set
             session.query(Task).get(task_id).machine = name
@@ -462,11 +480,13 @@ class Database(object):
 
             session.query(Task).get(task_id).guest = guest
             session.commit()
+            session.refresh(guest)
         except SQLAlchemyError as e:
             print e
             session.rollback()
             return None
-
+        finally:
+            session.close()
         return guest.id
 
     def guest_stop(self, guest_id):
@@ -477,10 +497,10 @@ class Database(object):
         try:
             session.query(Guest).get(guest_id).shutdown_on = datetime.now()
             session.commit()
-        except SQLAlchemyError as e:
-            print e
+        except SQLAlchemyError:
             session.rollback()
-            return None
+        finally:
+            session.close()
 
     def list_machines(self, locked=False):
         """Lists virtual machines.
@@ -489,11 +509,13 @@ class Database(object):
         session = self.Session()
         try:
             if locked:
-                machines = session.query(Machine).filter(Machine.locked == True)
+                machines = session.query(Machine).filter(Machine.locked == True).all()
             else:
-                machines = session.query(Machine)
+                machines = session.query(Machine).all()
         except SQLAlchemyError:
             return None
+        finally:
+            session.close()
         return machines
 
     def lock_machine(self, name=None, platform=None):
@@ -510,20 +532,25 @@ class Database(object):
             elif name:
                 machine = session.query(Machine).filter(Machine.name == name).filter(Machine.locked == False).first()
             elif platform:
-                machine = session.query(Machine).filter(Machine.platform == platform).filter(Machine.name != 'Cuckoo_Win7SP1').filter(Machine.locked == False).first()
+                machine = session.query(Machine).filter(Machine.platform == platform).filter(Machine.locked == False).first()
             else:
-                machine = session.query(Machine).filter(Machine.name != 'Cuckoo_Win7SP1').filter(Machine.locked == False).first()
+                machine = session.query(Machine).filter(Machine.locked == False).first()
         except SQLAlchemyError:
-                return None
+            session.close()
+            return None
 
         if machine:
             machine.locked = True
             machine.locked_changed_on = datetime.now()
             try:
                 session.commit()
+                session.refresh(machine)
             except SQLAlchemyError:
                 session.rollback()
                 return None
+            finally:
+                session.close()
+
         return machine
 
     def unlock_machine(self, label):
@@ -535,6 +562,7 @@ class Database(object):
         try:
             machine = session.query(Machine).filter(Machine.label == label).first()
         except SQLAlchemyError:
+            session.close()
             return None
 
         if machine:
@@ -542,9 +570,13 @@ class Database(object):
             machine.locked_changed_on = datetime.now()
             try:
                 session.commit()
+                session.refresh(machine)
             except SQLAlchemyError:
                 session.rollback()
                 return None
+            finally:
+                session.close()
+
         return machine
 
     def count_machines_available(self):
@@ -556,6 +588,8 @@ class Database(object):
             machines_count = session.query(Machine).filter(Machine.locked == False).count()
         except SQLAlchemyError:
             return 0
+        finally:
+            session.close()
         return machines_count
 
     def set_machine_status(self, label, status):
@@ -567,15 +601,21 @@ class Database(object):
         try:
             machine = session.query(Machine).filter(Machine.label == label).first()
         except SQLAlchemyError:
-               return
+            session.close()
+            return
 
         if machine:
             machine.status = status
             machine.status_changed_on = datetime.now()
             try:
                 session.commit()
+                session.refresh(machine)
             except SQLAlchemyError:
                 session.rollback()
+            finally:
+                session.close()
+        else:
+            session.close()
 
     def add_error(self, message, task_id):
         """Add an error related to a task.
@@ -589,6 +629,8 @@ class Database(object):
             session.commit()
         except SQLAlchemyError:
             session.rollback()
+        finally:
+            session.close()
 
     # The following functions are mostly used by external utils.
     ### JG: added interaction and internet parameters
@@ -596,12 +638,12 @@ class Database(object):
     def add(self,
             obj,
             timeout=0,
-            package=None,
-            options=None,
+            package="",
+            options="",
             priority=1,
-            custom=None,
-            machine=None,
-            platform=None,
+            custom="",
+            machine="",
+            platform="",
             memory=False,
             enforce_timeout=False,
             interaction=0,
@@ -639,8 +681,10 @@ class Database(object):
                 try:
                     sample = session.query(Sample).filter(Sample.md5 == obj.get_md5()).first()
                 except SQLAlchemyError:
+                    session.close()
                     return None
             except SQLAlchemyError:
+                session.close()
                 return None
 
             task = Task(obj.file_path)
@@ -667,22 +711,24 @@ class Database(object):
 
         try:
             session.commit()
+            id = task.id
         except SQLAlchemyError:
             session.rollback()
             return None
-
-        return task.id
+        finally:
+            session.close()
+        return id
 
     ### JG: added interaction and internet parameters
     def add_path(self,
                  file_path,
                  timeout=0,
-                 package=None,
-                 options=None,
+                 package="",
+                 options="",
                  priority=1,
-                 custom=None,
-                 machine=None,
-                 platform=None,
+                 custom="",
+                 machine="",
+                 platform="",
                  memory=False,
                  enforce_timeout=False,
                  interaction=0,
@@ -721,12 +767,12 @@ class Database(object):
     def add_url(self,
                 url,
                 timeout=0,
-                package=None,
-                options=None,
+                package="",
+                options="",
                 priority=1,
-                custom=None,
-                machine=None,
-                platform=None,
+                custom="",
+                machine="",
+                platform="",
                 memory=False,
                 enforce_timeout=False,
                 interaction=0,
@@ -758,40 +804,73 @@ class Database(object):
                         interaction,
                         internet)
 
-    def list_tasks(self, limit=None):
+    def list_tasks(self, limit=None, details=False):
         """Retrieve list of task.
         @param limit: specify a limit of entries.
         @return: list of tasks.
         """
         session = self.Session()
         try:
-            tasks = session.query(Task).order_by("added_on desc").limit(limit)
+            if details:
+                tasks = session.query(Task).options(joinedload("guest"), joinedload("errors")).order_by("added_on desc").limit(limit).all()
+            else:
+                tasks = session.query(Task).order_by("added_on desc").limit(limit).all()
         except SQLAlchemyError:
             return None
+        finally:
+            session.close()
         return tasks
 
-    def view_task(self, task_id):
+    def view_task(self, task_id, details=False):
         """Retrieve information on a task.
         @param task_id: ID of the task to query.
         @return: details on the task.
         """
         session = self.Session()
         try:
-            task = session.query(Task).get(task_id)
+            if details:
+                task = session.query(Task).options(joinedload("guest"), joinedload("errors")).get(task_id)
+            else:
+                task = session.query(Task).get(task_id)
         except SQLAlchemyError:
             return None
+        finally:
+            session.expunge(task)
+            session.close()
         return task
 
-    def view_sample(self, sample_id):
-        """Retrieve information on a sample.
-        @param sample_id: ID of the sample to query.
-        @return: details on the sample.
+    def delete_task(self, task_id):
+        """Delete information on a task.
+        @param task_id: ID of the task to query.
+        @return: operation status.
         """
         session = self.Session()
         try:
-            sample = session.query(Sample).get(sample_id)
+            task = session.query(Task).get(task_id)
+            session.delete(task)
+            session.commit()
         except SQLAlchemyError:
+            session.rollback()
+            return False
+        finally:
+            session.close()
+        return True
+
+    def view_sample(self, task_id):
+        """Retrieve information on a sample given a task id.
+        @param task_id: ID of the task to query.
+        @return: details on the sample used in task: task_id.
+        """
+        session = self.Session()
+        try:
+            sample_id = session.query(Task).get(task_id).sample_id
+            sample = session.query(Sample).get(sample_id)
+        except (SQLAlchemyError, AttributeError):
             return None
+        finally:
+            session.expunge(sample)
+            session.close()
+
         return sample
 
     def find_sample(self, md5=None, sha256=None):
@@ -804,9 +883,12 @@ class Database(object):
             if md5:
                 sample = session.query(Sample).filter(Sample.md5 == md5).first()
             elif sha256:
-                sample = sesison.query(Sample).fitler(Sample.sha256 == sha256).first()
+                sample = session.query(Sample).filter(Sample.sha256 == sha256).first()
         except SQLAlchemyError:
             return None
+        finally:
+            session.expunge(sample)
+            session.close()
         return sample
 
     def view_machine(self, name):
@@ -819,6 +901,9 @@ class Database(object):
             machine = session.query(Machine).filter(Machine.name == name).first()
         except SQLAlchemyError:
             return None
+        finally:
+            session.expunge(machine)
+            session.close()
         return machine
 
     def view_errors(self, task_id):
@@ -828,7 +913,9 @@ class Database(object):
         """
         session = self.Session()
         try:
-            errors = session.query(Error).filter(Error.task_id == task_id)
+            errors = session.query(Error).filter(Error.task_id == task_id).all()
         except SQLAlchemyError:
             return None
+        finally:
+            session.close()
         return errors

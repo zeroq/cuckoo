@@ -215,7 +215,7 @@ class CreateNicerSummery(Processing):
 			if not file_path.endswith(".csv"):
 				continue
 
-			with open(file_path+".converted", 'rb') as csvfile:
+			with open(file_path, 'rb') as csvfile:
 				behaviorReader = csv.reader(csvfile, delimiter=',', quotechar='"')
 				while True:
 					try:

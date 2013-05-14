@@ -48,6 +48,7 @@ class VirusTotal(Processing):
 
         try:
             if self.options.get("proxy", None) == 'yes':
+                log.info("using proxy for connection to virustotal: %s %s:%s" % (self.options.get("pprotocol"), self.options.get("pserver"), self.options.get("pport")))
                 proxy = urllib2.ProxyHandler({'%s' % (self.options.get("pprotocol")): '%s:%s' % (self.options.get("pserver"), self.options.get("pport"))})
                 opener = urllib2.build_opener(proxy)
                 urllib2.install_opener(opener)

@@ -5,6 +5,7 @@ import sys
 import json
 import os
 import logging
+import codecs
 
 from lib.cuckoo.common.abstracts import Processing
 from lib.cuckoo.common.utils import convert_to_printable
@@ -195,6 +196,7 @@ class CreateNicerSummery(Processing):
 
 	def run(self):
 		self.key = "newsummary"
+		BLOCKSIZE = 1048576
 
 		if not os.path.exists(self.logs_path):
 			log.error("Analysis results folder does not exist at path \"%s\"." % self.logs_path)
@@ -214,12 +216,26 @@ class CreateNicerSummery(Processing):
 			if not file_path.endswith(".csv"):
 				continue
 
+			with codecs.open(file_path, "r", "utf-16") as sourceFile:
+				with codecs.open(file_path+".converted", "w", "utf-8") as targetFile:
+					while True:
+						contents = sourceFile.read(BLOCKSIZE)
+						if not contents:
+							break
+						targetFile.write(contents)
 
-			with open(file_path, 'rb') as csvfile:
+
+			with open(file_path+".converted", 'rb') as csvfile:
 				behaviorReader = csv.reader(csvfile, delimiter=',', quotechar='"')
-				for row in behaviorReader:
-					if row and len(row)>5 and row[5] == 'filesystem':
-						self.handleFilesystem(row, filesysDict)
+				while True:
+					try:
+						row = behaviorReader.next()
+						if row and len(row)>5 and row[5] == 'filesystem':
+							self.handleFilesystem(row, filesysDict)
+					except csv.Error:
+						continue
+					except StopIteration:
+						break
 
 		resultDict = {}
 		resultDict['filesystem'] = {}

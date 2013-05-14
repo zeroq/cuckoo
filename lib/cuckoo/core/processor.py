@@ -61,6 +61,7 @@ class Processor:
 
         # If the processing module is disabled in the config, skip it.
         if not options.enabled:
+            log.warning("Processing Module not enabled: %s" % (current.__class__.__name__))
             return None
 
         # Give it path to the analysis results.
@@ -74,6 +75,7 @@ class Processor:
         current.set_interaction_mode(self.interaction)
 
         try:
+            log.info("Running processing module: %s" % (current.__class__.__name__))
             # Run the processing module and retrieve the generated data to be
             # appended to the general results container.
             data = current.run()

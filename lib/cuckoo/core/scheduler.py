@@ -364,14 +364,14 @@ class AnalysisManager(Thread):
             logs_path = os.path.join(self.storage, "logs")
             for csv in os.listdir(logs_path):
                 if not csv.endswith(".raw"):
+                    if csv.endswith(".csv"):
+                        self.reduceCSV(csv)
                     continue
                 csv = os.path.join(logs_path, csv)
                 if os.stat(csv).st_size > self.cfg.processing.analysis_size_limit:
-                    ### JG: added check to reduce CSV file
-                    if not self.reduceCSV(csv):
-                        log.error("Analysis file %s is too big to be processed, "
-                                  "analysis aborted. Process it manually with the "
-                                  "provided utilities", csv)
+                    log.error("Analysis file %s is too big to be processed, "
+                              "analysis aborted. Process it manually with the "
+                              "provided utilities", csv)
                     return False
         except OSError as e:
             log.warning("Error accessing analysis logs (task=%d): %s", self.task.id, e)
@@ -398,7 +398,7 @@ class AnalysisManager(Thread):
         ### JG: function added to remove duplicate lines from large CSVs
         import copy
         previousLine = ""
-        log.info("csv file %s too big, trying to remove duplicate lines ..." % (csv))
+        log.info("working on csv file %s, trying to remove duplicate lines ..." % (csv))
         try:
             with open(csv, 'r') as f, open(csv+'.red', 'w') as o:
                 for line in f:

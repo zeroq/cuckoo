@@ -65,7 +65,8 @@ class visopcode(Processing):
                         except:
                             bucket[opcode] = 1
                 #ax.plot(range(1, len(bucket)-1), bucket.values()[1:-1], label=section.Name.replace('\x00',''))
-                ax.plot(range(0, len(bucket)), bucket.values(), label=section.Name.replace('\x00',''))
+                #ax.plot(range(0, len(bucket)), bucket.values(), label=section.Name.replace('\x00',''))
+                ax.plot(range(0, len(bucket)), bucket.values(), label=section.Name.replace('\x00','').decode('ascii', errors='ignore'))
             ax.set_yscale('log')
             ax.set_title('Opcode Distribution of Sections')
             ax.set_xlabel('Opcode')

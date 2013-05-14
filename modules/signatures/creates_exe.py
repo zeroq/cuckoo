@@ -19,6 +19,12 @@ class CreatesExe(Signature):
                 if file_path.lower().endswith(".exe"):
                     if {"file_name" : file_path} not in self.data:
                         self.data.append({"file_name" : file_path})
+            ### {"status": "1", "accessmodes": ["FILE_COPY"], "destination_filename": "C:\\Documents and Settings\\All Users\\svchost.exe", "source_filename": "C:\\DOCUME~1\\ADMINI~1\\LOCALS~1\\Temp\\Voter-885940-6755.pdf.exe", "debug": "CopyFileA", "type": "file", "statusmessage": "Unknown"}
+            for filedict in self.results["newsummary"]["filesystem"]["copy"]:
+                file_path = filedict['destination_filename']
+                if file_path.lower().endswith(".exe"):
+                    if {"file_name" : file_path} not in self.data:
+                        self.data.append({"file_name" : file_path})
         except:
             pass
         if len(self.data)>0:

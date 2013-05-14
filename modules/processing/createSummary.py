@@ -5,7 +5,6 @@ import sys
 import json
 import os
 import logging
-import codecs
 
 from lib.cuckoo.common.abstracts import Processing
 from lib.cuckoo.common.utils import convert_to_printable
@@ -215,15 +214,6 @@ class CreateNicerSummery(Processing):
 
 			if not file_path.endswith(".csv"):
 				continue
-
-			with codecs.open(file_path, "r", "utf-16") as sourceFile:
-				with codecs.open(file_path+".converted", "w", "utf-8") as targetFile:
-					while True:
-						contents = sourceFile.read(BLOCKSIZE)
-						if not contents:
-							break
-						targetFile.write(contents)
-
 
 			with open(file_path+".converted", 'rb') as csvfile:
 				behaviorReader = csv.reader(csvfile, delimiter=',', quotechar='"')

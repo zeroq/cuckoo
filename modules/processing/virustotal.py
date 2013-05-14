@@ -47,10 +47,10 @@ class VirusTotal(Processing):
         data = urllib.urlencode({"resource" : resource, "apikey" : VIRUSTOTAL_KEY})
 
         try:
-			if self.options.get("proxy", None) == 'yes':
-	            proxy = urllib2.ProxyHandler({'%s' % (self.options.get("pprotocol")): '%s:%s' % (self.options.get("pserver"), self.options.get("pport"))})
-    	        opener = urllib2.build_opener(proxy)
-        	    urllib2.install_opener(opener)
+            if self.options.get("proxy", None) == 'yes':
+                proxy = urllib2.ProxyHandler({'%s' % (self.options.get("pprotocol")): '%s:%s' % (self.options.get("pserver"), self.options.get("pport"))})
+                opener = urllib2.build_opener(proxy)
+                urllib2.install_opener(opener)
             request = urllib2.Request(url, data)
             response = urllib2.urlopen(request)
         except urllib2.URLError as e:

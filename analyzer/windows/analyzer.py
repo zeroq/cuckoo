@@ -490,7 +490,7 @@ class Analyzer:
 
         ### JG: disable timer if interactive command shell
         if self.config.interaction != 0:
-            log.info("Disabling timer due to interactive command shell")
+            log.info("Disabling IE spawn due to interactive command shell")
             enableIEspawn = False
         else:
             enableIEspawn = True

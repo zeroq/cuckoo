@@ -69,8 +69,10 @@ class NetlogParser(object):
             timehigh = self.read_int32()
             # FILETIME is 100-nanoseconds from 1601 :/
             vmtimeunix = (timelow + (timehigh << 32)) / 10000000.0 - 11644473600
-            vmtime = datetime.datetime.fromtimestamp(vmtimeunix)
-
+            try:
+                vmtime = datetime.datetime.fromtimestamp(vmtimeunix)
+            except:
+                vmtime = None
             pid = self.read_int32()
             ppid = self.read_int32()
             modulepath = self.read_string()

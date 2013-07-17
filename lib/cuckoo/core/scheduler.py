@@ -278,6 +278,7 @@ class AnalysisManager(Thread):
                 guest = GuestManager(machine.name, machine.ip, machine.platform)
                 # Start the analysis.
                 guest.start_analysis(options)
+		log.info("guest initialization successfull.")
             except CuckooGuestError as e:
                 log.error(str(e), extra={"task_id" : self.task.id})
 

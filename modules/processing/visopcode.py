@@ -37,6 +37,9 @@ class visopcode(Processing):
         except StandardError as e:
             log.warning("no PE file, cannot create opcode graph: %s" % (e))
             return {}
+        except:
+            log.warning("no PE file, cannot create opcode graph")
+            return {}
 
         dbytes = 8
         fig = plt.figure()

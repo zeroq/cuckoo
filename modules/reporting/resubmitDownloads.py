@@ -58,9 +58,13 @@ class resubmitDownloads(Report):
             os.makedirs(downloadDir)
         jsonReport = os.path.join(self.analysis_path, "reports/report.json")
         if os.path.exists(jsonReport):
-            report = codecs.open(jsonReport, "r", "utf-8")
-            obj = json.load(report)
-            report.close()
+            try:
+                report = codecs.open(jsonReport, "r", "utf-8")
+                obj = json.load(report)
+                report.close()
+            except StandardError as e:
+                log.warning("Unable to load JSON dump: %s" % (e))
+                return None
 
             for httpRequest in obj['network']['http']:
                 if httpRequest['method'].lower() == 'get' and httpRequest['uri'].lower().endswith('.exe'):
@@ -122,7 +126,7 @@ class resubmitDownloads(Report):
                     conn.commit()
                     sampleID = cur.lastrowid
                     ### then create new task
-                    query = "INSERT INTO \"tasks\" (target, category, timeout, priority, machine, package, platform, memory, enforce_timeout, sample_id, interaction, internet, added_on) VALUES ('%s', 'file', '200', '1', '', 'exe', 'windows', '0', '0', '%s', '0', '0', '%s')" % (item[0], sampleID, time.strftime('%Y-%m-%d %H:%M:%S'))
+                    query = "INSERT INTO \"tasks\" (target, category, timeout, priority, machine, package, platform, memory, enforce_timeout, sample_id, interaction, internet, added_on, options) VALUES ('%s', 'file', '200', '1', 'SBox1', 'exe', 'windows', '0', '0', '%s', '0', '0', '%s', '')" % (item[0], sampleID, time.strftime('%Y-%m-%d %H:%M:%S'))
                     cur.execute(query)
                     conn.commit()
                     continue

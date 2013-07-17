@@ -18,7 +18,7 @@ SHOT_DELAY = 10
 
 class Screenshots(Auxiliary, Thread):
     """Take screenshots."""
-    
+
     def __init__(self):
         Thread.__init__(self)
         self.do_run = True
@@ -39,10 +39,10 @@ class Screenshots(Auxiliary, Thread):
         img_last = None
 
         while self.do_run:
-            time.sleep(SHOT_DELAY)
 
             try:
                 img_current = Screenshot().take()
+                time.sleep(SHOT_DELAY)
             except IOError as e:
                 log.error("Cannot take screenshot: %s", e)
                 continue
@@ -60,10 +60,10 @@ class Screenshots(Auxiliary, Thread):
 
             # now upload to host from the StringIO
             nf = NetlogFile("shots/%s.jpg" % str(img_counter).rjust(4, "0"))
-            
+
             for chunk in tmpio:
                 nf.sock.sendall(chunk)
-            
+
             nf.close()
 
             img_last = img_current

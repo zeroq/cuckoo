@@ -11,13 +11,19 @@ from lib.cuckoo.common.utils import convert_to_printable
 
 log = logging.getLogger(__name__)
 
-class CreateNicerSummery(Processing):
+class CreateNicerSummary(Processing):
+	order = 3
 
 	def __init__(self):
 		self.ERROR_MAPPING = {
+			"0": "STATUS_SUCCESS",
 			"0x00000000": "STATUS_SUCCESS",
+			"1": "STATUS_WAIT_1",
 			"0x00000001": "STATUS_WAIT_1",
-			"0xc0000034": "STATUS_OBJECT_NAME_NOT_FOUND"
+			"3221225524": "STATUS_OBJECT_NAME_NOT_FOUND",
+			"0xc0000034": "STATUS_OBJECT_NAME_NOT_FOUND",
+			"3221225530": "STATUS_OBJECT_PATH_NOT_FOUND",
+			"0xc000003a": "STATUS_OBJECT_PATH_NOT_FOUND"
 			}
 
 		self.DIRECT_ACCESS_MAPPING = {
@@ -27,6 +33,41 @@ class CreateNicerSummery(Processing):
 			"0x20000000": "GENERIC_EXECUTE",
 			"0x10000000": "GENERIC_ALL"
 			}
+
+		self.REG_ACCESS_MAPPING = {
+				"33554432": "MAXIMUM_ALLOWED",
+				"0x2000000": "MAXIMUM_ALLOWED",
+				"983103": "ALL_ACCESS",
+				"131097": "READ",
+				"131097": "EXECUTE",
+				"131078": "WRITE",
+				"131103": "ALL_ACCESS"
+				}
+
+		self.REGISTRY_MAPPING = {
+				"0x80000000": "HKEY_CLASSES_ROOT",
+				"0x80000001": "HKEY_CURRENT_USER",
+				"0x80000002": "HKEY_LOCAL_MACHINE",
+				"0x80000003": "HKEY_USERS",
+				"0x80000004": "HKEY_PERFORMANCE_DATA",
+				"0x80000005": "HKEY_CURRENT_CONFIG"
+				}
+
+		self.REG_TYPE_MAPPING = {
+				"1": "REG_SZ",
+				"2": "EXPAND_SZ",
+				"3": "REG_BINARY",
+				"4": "REG_DWORD",
+				"5": "DWORD_BIG_ENDIAN",
+				"6": "LINK"
+				}
+
+		self.REG_STATUS_MAPPING = {
+				"0": "REG_SUCCESS",
+				"2": "REG_NOT_FOUND",
+				"5": "REG_ACCESS_DENIED",
+				"259": "ERROR_NO_MORE_ITEMS"
+				}
 
 	def convertAccessMode(self, accessmode, ftype):
 		modes = []
@@ -90,70 +131,225 @@ class CreateNicerSummery(Processing):
 
 		return "%s - %s - %s" % (bitVector,accessmode, positions), modes
 
+	def handleRegistry(self, row, registryDict):
+		item = None
+		if (row[6].lower() == 'regcreatekeyexa' or row[6].lower() == 'regcreatekeyexw') and len(row) >= 13:
+			"""
+			check for registry create key
+			"""
+			api = row[6]
+			status = row[7]
+			failurecode = row[8].strip()
+			regpath = row[10].split('->')[1]
+			try:
+				failuremessage = self.REG_STATUS_MAPPING[failurecode]
+			except:
+				failuremessage = failurecode
+			try:
+				hive = self.REGISTRY_MAPPING[row[9].split('->')[1].lower()]
+			except StandardError as e:
+				hive = row[9].split('->')[1].lower()
+				if hive in registryDict['inProgress']:
+					oitem = registryDict['inProgress'][hive]
+					hive = oitem['hive']
+					regpath = "%s\\%s" % (oitem['path'], regpath)
+			access = row[12].split('->')[1]
+			try:
+				accessmode = self.REG_ACCESS_MAPPING[access.lower()]
+			except:
+				accessmode = access.lower()
+			handle = row[13].split('->')[1]
+			item = {"api": [api], "method": "read", "hive": hive, "status": [status], "statusmessage": [failuremessage], "path": regpath, "handle": handle, "access": accessmode}
+			if int(failurecode) == 0:
+				registryDict['inProgress'][handle] = item
+				item = None
+		elif row[6].lower() == 'regclosekey' and len(row) >= 10:
+			"""
+			check for registry close key
+			"""
+			api = row[6]
+			handle = row[9].split('->')[1]
+			item = registryDict['inProgress'].pop(handle, None)
+			if item:
+				item['api'].append(api)
+				if not item.has_key("method"):
+					item['method'] = 'read'
+		elif (row[6].lower() == 'regsetvalueexw' or row[6].lower() == 'regsetvalueexa') and len(row) >= 12 and row[9].split('->')[1] in registryDict['inProgress']:
+			"""
+			check for registry set value
+			"""
+			api = row[6]
+			status = row[7]
+			failurecode = row[8].strip()
+			try:
+				failuremessage = self.REG_STATUS_MAPPING[failurecode]
+			except:
+				failuremessage = failurecode
+			handle = row[9].split('->')[1]
+			item = registryDict['inProgress'][handle]
+			item['api'].append(api)
+			item['method'] = 'write'
+			regkey = row[10].split('->')[1]
+			regtype = row[11].split('->')[1]
+			regvalue = row[12].split('->')[1]
+			if not 'key' in item:
+				item['key'] = [regkey]
+			else:
+				item['key'].append(regkey)
+			if not 'value' in item:
+				item['value'] = [regvalue]
+			else:
+				item['value'].append(regvalue)
+			try:
+				if not 'type' in item:
+					item['type'] = [self.REG_TYPE_MAPPING[regtype]]
+				else:
+					item['type'].append(self.REG_TYPE_MAPPING[regtype])
+			except:
+				item['type'] = regtype
+			item['status'].append(status)
+			item['statusmessage'].append(failuremessage)
+			registryDict['inProgress'][handle] = item
+			item = None
+		elif (row[6].lower() == 'regqueryvalueexa' or row[6].lower() == 'regqueryvalueexw') and len(row) >= 11 and row[9].split('->')[1] in registryDict['inProgress']:
+			"""
+			check for registry query value
+			"""
+			api = row[6]
+			status = row[7]
+			failurecode = row[8].strip()
+			try:
+				failuremessage = self.REG_STATUS_MAPPING[failurecode]
+			except:
+				failuremessage = failurecode
+			handle = row[9].split('->')[1]
+			item = registryDict['inProgress'][handle]
+			item['api'].append(api)
+			item['method'] = 'read'
+			item['status'].append(status)
+			item['statusmessage'].append(failuremessage)
+			regkey = row[10].split('->')[1]
+			regdata = row[11].split('->')[1]
+			if not 'key' in item:
+				item['key'] = [regkey]
+			else:
+				item['key'].append(regkey)
+			if not 'data' in item:
+				item['data'] = [regdata]
+			else:
+				item['data'].append(regdata)
+			registryDict['inProgress'][handle] = item
+			item = None
+		elif (row[6].lower() == 'regopenkeyexa' or row[6].lower() == 'regopenkeyexw') and len(row) >= 12:
+			"""
+			check for registry open key
+			"""
+			api = row[6]
+			status = row[7]
+			failurecode = row[8].strip()
+			try:
+				failuremessage = self.REG_STATUS_MAPPING[failurecode]
+			except:
+				failuremessage = failurecode
+			try:
+				hive = self.REGISTRY_MAPPING[row[9].split('->')[1].lower()]
+			except StandardError as e:
+				hive = row[9].split('->')[1].lower()
+			regpath = row[10].split('->')[1]
+			handle = row[11].split('->')[1]
+			item = {"api": [api], "method": "read", "hive": hive, "status": [status], "statusmessage": [failuremessage], "path": regpath, "handle": handle, "access": ""}
+			if int(failurecode) == 0:
+				registryDict['inProgress'][handle] = item
+				item = None
+		elif (row[6].lower() == 'regenumkeyexa' or row[6].lower() == 'regenumkeyexw') and len(row) >= 13 and row[9].split('->')[1] in registryDict['inProgress']:
+			"""
+			check for key enumeration
+			"""
+			api = row[6]
+			status = row[7]
+			failurecode = row[8].strip()
+			try:
+				failuremessage = self.REG_STATUS_MAPPING[failurecode]
+			except:
+				failuremessage = failurecode
+			handle = row[9].split('->')[1]
+			item = registryDict['inProgress'][handle]
+			item['api'].append(api)
+			item['method'] = 'enumerate'
+			item['status'].append(status)
+			item['statusmessage'].append(failuremessage)
+			regdata = row[11].split('->')[1]
+			if not 'data' in item:
+				item['data'] = [regdata]
+			else:
+				item['data'].append(regdata)
+			registryDict['inProgress'][handle] = item
+			item = None
+		else:
+			#print row
+			return
+		if item:
+			if registryDict.has_key(item['method']):
+				registryDict[item['method']].append( item )
+			else:
+				registryDict[item['method']] = [ item ]
+		return
+
 	def handleFilesystem(self, row, filesysDict):
 		filename = None
+		modes = None
 		srcFile = None
 		dstFile = None
-		if row[6].lower() == 'ntcreatefile' and len(row) >= 13:
+		### NtCreateFile
+		if (row[6].lower() == 'ntcreatefile' or row[6].lower() == 'ntopenfile') and len(row) >= 13:
 			api = row[6]
 			status = row[7]
 
-			failurecode = row[8]
+			failurecode = row[8].strip()
 			try:
 				failurereason = self.ERROR_MAPPING[failurecode.lower()]
 			except:
+				#print row
+				#print [failurecode.lower()]
 				failurereason = "Unknown"
 
 			filehandle = row[9]
 			accessmode = row[10].split('->')[1]
 
 			filename = row[11].split('->')[1]
-			if filename.startswith('\\??\\'):
-				filename = filename[4:]
 
 			createdisposition = row[12]
-
-			if filename.lower().count('\\pipe')>0:
-				ftype = 'pipe'
-			elif filename.lower().count('\\device')>0:
-				ftype = 'device'
-			else:
-				ftype = 'file'
 
 			try:
 				modes = [self.DIRECT_ACCESS_MAPPING[accessmode.lower()]]
 			except:
-				accessmode, modes = self.convertAccessMode(accessmode, ftype)
+				pass
 		elif (row[6].lower() == 'deletefilew' or row[6].lower() == 'deletefilea') and len(row) == 10:
 			api = row[6]
 			status = row[7]
 
-			failurecode = row[8]
+			failurecode = row[8].strip()
 			try:
 				failurereason = self.ERROR_MAPPING[failurecode.lower()]
 			except:
+				#print [failurecode.lower()]
 				failurereason = "Unknown"
 
 			filename = row[9].split('->')[1]
 			if filename.startswith('\\??\\'):
 				filename = filename[4:]
 
-			if filename.lower().count('\\pipe')>0:
-				ftype = 'pipe'
-			elif filename.lower().count('\\device')>0:
-				ftype = 'device'
-			else:
-				ftype = 'file'
-
 			accessmode = api
 			modes = ["FILE_DELETE"]
 		elif (row[6].lower() == 'copyfilea' or row[6].lower() == 'copyfilew') and len(row) == 11:
 			api = row[6]
 			status = row[7]
-			failurecode = row[8]
+
+			failurecode = row[8].strip()
 			try:
 				failurereason = self.ERROR_MAPPING[failurecode.lower()]
 			except:
+				#print [failurecode.lower()]
 				failurereason = "Unknown"
 
 			srcFile = row[9].split('->')[1]
@@ -165,12 +361,21 @@ class CreateNicerSummery(Processing):
 
 			accessmode = api
 			modes = ["FILE_COPY"]
-			ftype = 'file'
-
 		else:
+			#print row
 			return
 
 		if filename:
+			if filename.startswith('\\??\\'):
+				filename = filename[4:]
+			if filename.lower().count('\\pipe')>0 or filename.lower().count('pipe\\')>0:
+				ftype = 'pipe'
+			elif filename.lower().count('\\device')>0:
+				ftype = 'device'
+			else:
+				ftype = 'file'
+			if not modes:
+				accessmode, modes = self.convertAccessMode(accessmode, ftype)
 			item = {"filename": filename, "status": status, "accessmodes": modes, "statusmessage": failurereason, "debug": accessmode, "type": ftype}
 			if filesysDict.has_key(api) and filesysDict[api].has_key(accessmode):
 				if item not in filesysDict[api][accessmode]:
@@ -181,6 +386,7 @@ class CreateNicerSummery(Processing):
 				filesysDict[api] = {}
 				filesysDict[api][accessmode] = [ item ]
 		elif srcFile and dstFile:
+			ftype = 'file'
 			item = {"source_filename": srcFile, "destination_filename": dstFile, "status": status, "accessmodes": modes, "statusmessage": failurereason, "debug": accessmode, "type": ftype}
 			if filesysDict.has_key(api) and filesysDict[api].has_key(accessmode):
 				if item not in filesysDict[api][accessmode]:
@@ -206,6 +412,11 @@ class CreateNicerSummery(Processing):
 			return {}
 
 		filesysDict = {}
+		registryDict = {}
+		registryDict['inProgress'] = {}
+		registryDict['read'] = []
+		registryDict['write'] = []
+		registryDict['enumerate'] = []
 		for file_name in os.listdir(self.logs_path):
 			file_path = os.path.join(self.logs_path, file_name)
 
@@ -222,6 +433,8 @@ class CreateNicerSummery(Processing):
 						row = behaviorReader.next()
 						if row and len(row)>5 and row[5] == 'filesystem':
 							self.handleFilesystem(row, filesysDict)
+						elif row and len(row)>5 and row[5] == 'registry':
+							self.handleRegistry(row, registryDict)
 					except csv.Error:
 						continue
 					except StopIteration:
@@ -237,6 +450,9 @@ class CreateNicerSummery(Processing):
 		resultDict['filesystem']['read_attributes'] = []
 
 		resultDict['registry'] = {}
+		resultDict['registry']['write'] = registryDict['write']
+		resultDict['registry']['read'] = registryDict['read']
+		resultDict['registry']['enumerate'] = registryDict['enumerate']
 		resultDict['mutex'] = {}
 
 		for api in filesysDict:
@@ -268,4 +484,5 @@ class CreateNicerSummery(Processing):
 						pass
 
 		#print json.dumps(resultDict, sort_keys=True, indent=4, separators=(',', ': '))
+		#print json.dumps(resultDict['registry'], sort_keys=True, indent=4, separators=(',', ': '))
 		return resultDict

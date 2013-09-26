@@ -5,6 +5,7 @@
 import os
 import json
 import codecs
+import logging
 
 from lib.cuckoo.common.abstracts import Report
 from lib.cuckoo.common.exceptions import CuckooReportError
@@ -17,6 +18,8 @@ class JsonDump(Report):
         @param results: Cuckoo results dict.
         @raise CuckooReportError: if fails to write report.
         """
+        log = logging.getLogger("jsondump")
+
         failure = False
         try:
             report = codecs.open(os.path.join(self.reports_path, "report.json"), "w", "utf-8")
@@ -24,6 +27,7 @@ class JsonDump(Report):
             report.close()
         except (UnicodeError, TypeError, IOError) as e:
             failure = True
+            log.error("json failure: %s" % (e))
             #raise CuckooReportError("Failed to generate JSON report: %s" % e)
 
         ###JG: add splitted report
@@ -38,7 +42,17 @@ class JsonDump(Report):
                     report = codecs.open(reportFile, "r", "utf-8")
                     pjson = report.read()
                     pjson = pjson.replace('"calls":','"calls": [')
-                    obj = json.loads(pjson)
+                    try:
+                        obj = json.loads(pjson)
+                    except:
+                        nres = []
+                        llist = pjson.split('\n')
+                        for line in llist:
+                            if line.count('"calls":')>0 and line.count('[')==0:
+                                nres.append('"calls": [')
+                            nres.append(line)
+                        tc = "\n".join(nres)
+                        obj = json.loads(tc)
                     report.close()
 
                 dest = os.path.join(self.reports_path, "jsonparts")
@@ -63,7 +77,7 @@ class JsonDump(Report):
                         json.dump(results[k], fp)
                         fp.close()
                     except (UnicodeError, TypeError, IOError) as e:
-                        print results[k]
+                        log.error("failed splitted dump: %s" % (e))
                         continue
         except (UnicodeError, TypeError, IOError) as e:
             raise CuckooReportError("Failed to generate JSON partial reports: %s" % e)

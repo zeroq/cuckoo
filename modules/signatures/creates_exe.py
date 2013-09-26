@@ -6,7 +6,7 @@ from lib.cuckoo.common.abstracts import Signature
 
 class CreatesExe(Signature):
     name = "creates_exe"
-    description = "Creates a Windows executable on the filesystem"
+    description = "Creates a Windows executable in the filesystem"
     severity = 2
     categories = ["generic"]
     authors = ["Jan Goebel"]
@@ -16,13 +16,13 @@ class CreatesExe(Signature):
         try:
             for filedict in self.results["newsummary"]["filesystem"]["write"]:
        	        file_path = filedict["filename"]
-                if file_path.lower().endswith(".exe"):
+                if file_path.lower().endswith(".exe") or file_path.lower().endswith(".com") or file_path.lower().endswith(".bat"):
                     if {"file_name" : file_path} not in self.data:
                         self.data.append({"file_name" : file_path})
             ### {"status": "1", "accessmodes": ["FILE_COPY"], "destination_filename": "C:\\Documents and Settings\\All Users\\svchost.exe", "source_filename": "C:\\DOCUME~1\\ADMINI~1\\LOCALS~1\\Temp\\Voter-885940-6755.pdf.exe", "debug": "CopyFileA", "type": "file", "statusmessage": "Unknown"}
             for filedict in self.results["newsummary"]["filesystem"]["copy"]:
                 file_path = filedict['destination_filename']
-                if file_path.lower().endswith(".exe"):
+                if file_path.lower().endswith(".exe") or file_path.lower().endswith(".com") or file_path.lower().endswith(".bat"):
                     if {"file_name" : file_path} not in self.data:
                         self.data.append({"file_name" : file_path})
         except:

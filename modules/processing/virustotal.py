@@ -48,21 +48,30 @@ class VirusTotal(Processing):
 
         try:
             if self.options.get("proxy"):
-                log.info("using proxy for connection to virustotal: %s %s:%s" % (self.options.get("pprotocol"), self.options.get("pserver"), self.options.get("pport")))
+                log.debug("using proxy for connection to virustotal: %s %s:%s" % (self.options.get("pprotocol"), self.options.get("pserver"), self.options.get("pport")))
                 proxy = urllib2.ProxyHandler({'%s' % (self.options.get("pprotocol")): '%s:%s' % (self.options.get("pserver"), self.options.get("pport"))})
                 opener = urllib2.build_opener(proxy)
                 urllib2.install_opener(opener)
             request = urllib2.Request(url, data)
             response = urllib2.urlopen(request)
         except urllib2.URLError as e:
-            raise CuckooProcessingError("Unable to establish connection to VirusTotal: %s" % e)
+            log.error("Unable to establish connection to VirusTotal: %s" % e)
+            #raise CuckooProcessingError("Unable to establish connection to VirusTotal: %s" % e)
+            return virustotal
         except urllib2.HTTPError as e:
-            raise CuckooProcessingError("Unable to perform HTTP request to VirusTotal (http code=%s)" % e.code)
+            log.error("Unable to perform HTTP request to VirusTotal (http code=%s)" % e.code)
+            #raise CuckooProcessingError("Unable to perform HTTP request to VirusTotal (http code=%s)" % e.code)
+            return virustotal
 
         try:
             virustotal = json.loads(response.read())
         except ValueError as e:
-            raise CuckooProcessingError("Unable to convert response to JSON: {0}".format(e))
+            log.error("Unable to convert response to JSON: {0}".format(e))
+            #raise CuckooProcessingError("Unable to convert response to JSON: {0}".format(e))
+            return virustotal
+        except StandardError as e:
+            log.error("VirusTotal Error: %s" % (e))
+            return virustotal
 
         if "scans" in virustotal:
             virustotal["scans"] = dict([(engine.replace(".", "_"), signature) for engine, signature in virustotal["scans"].items()])

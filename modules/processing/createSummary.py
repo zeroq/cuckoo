@@ -159,7 +159,7 @@ class CreateNicerSummary(Processing):
 			except:
 				accessmode = access.lower()
 			handle = row[13].split('->')[1]
-			item = {"api": [api], "method": "read", "hive": hive, "status": [status], "statusmessage": [failuremessage], "path": regpath, "handle": handle, "access": accessmode}
+			item = {"api": [api], "method": "read", "hive": hive, "status": [status], "statusmessage": [failuremessage], "path": regpath, "handle": handle, "access": accessmode, "key": [''], "type": [''], "value": [''], "data": ['']}
 			if int(failurecode) == 0:
 				registryDict['inProgress'][handle] = item
 				item = None
@@ -247,6 +247,7 @@ class CreateNicerSummary(Processing):
 			api = row[6]
 			status = row[7]
 			failurecode = row[8].strip()
+			regpath = row[10].split('->')[1]
 			try:
 				failuremessage = self.REG_STATUS_MAPPING[failurecode]
 			except:
@@ -255,9 +256,12 @@ class CreateNicerSummary(Processing):
 				hive = self.REGISTRY_MAPPING[row[9].split('->')[1].lower()]
 			except StandardError as e:
 				hive = row[9].split('->')[1].lower()
-			regpath = row[10].split('->')[1]
+				if hive in registryDict['inProgress']:
+					oitem = registryDict['inProgress'][hive]
+					hive = oitem['hive']
+					regpath = "%s\\%s" % (oitem['path'], regpath)
 			handle = row[11].split('->')[1]
-			item = {"api": [api], "method": "read", "hive": hive, "status": [status], "statusmessage": [failuremessage], "path": regpath, "handle": handle, "access": ""}
+			item = {"api": [api], "method": "read", "hive": hive, "status": [status], "statusmessage": [failuremessage], "path": regpath, "handle": handle, "access": "", "key": [''], "type": [''], "value": [''], "data": ['']}
 			if int(failurecode) == 0:
 				registryDict['inProgress'][handle] = item
 				item = None
@@ -398,6 +402,10 @@ class CreateNicerSummary(Processing):
 				filesysDict[api][accessmode] = [ item ]
 		return
 
+	def unicode_reader(self, data, dialect=csv.excel, **kwargs):
+		csv_reader = csv.reader(data, dialect=dialect, **kwargs)
+		for row in csv_reader:
+			yield [cell.decode('utf-8', errors='ignore') for cell in row]
 
 	def run(self):
 		self.key = "newsummary"
@@ -426,8 +434,17 @@ class CreateNicerSummary(Processing):
 			if not file_path.endswith(".csv"):
 				continue
 
+			### test for NULL bytes
+			fp = open(file_path, 'rb')
+			content = fp.read()
+			fp.close()
+			fp = open(file_path, 'wb')
+			fp.write(content.replace('\x00', ''))
+			fp.close()
+
 			with open(file_path, 'rb') as csvfile:
-				behaviorReader = csv.reader(csvfile, delimiter=',', quotechar='"')
+				#behaviorReader = csv.reader(csvfile, delimiter=',', quotechar='"')
+				behaviorReader = self.unicode_reader(csvfile, delimiter=',', quotechar='"')
 				while True:
 					try:
 						row = behaviorReader.next()

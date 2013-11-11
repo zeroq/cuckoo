@@ -366,7 +366,7 @@ class AnalysisManager(Thread):
             for csv in os.listdir(logs_path):
                 if not csv.endswith(".raw"):
                     if csv.endswith(".csv"):
-                        self.reduceCSV(csv)
+                        self.reduceCSV(os.path.join(logs_path, csv))
                     continue
                 csv = os.path.join(logs_path, csv)
                 if os.stat(csv).st_size > self.cfg.processing.analysis_size_limit:
@@ -403,16 +403,18 @@ class AnalysisManager(Thread):
         try:
             with open(csv, 'r') as f, open(csv+'.red', 'w') as o:
                 for line in f:
-                    if line != previousLine: o.write(line)
-                    previousLine = copy.copy(line)
-            if os.stat(csv+'.red').st_size > self.cfg.cuckoo.processing.analysis_size_limit:
+                    if line != previousLine: 
+                        o.write(line)
+                        previousLine = copy.copy(line)
+            if os.stat(csv+'.red').st_size > self.cfg.processing.analysis_size_limit:
                 raise CuckooAnalysisError("Analysis file %s is too big to be processed. Analysis aborted. You can process it manually" % csv)
             else:
                 os.rename(csv, csv+'.original')
                 os.rename(csv+'.red', csv)
                 log.info("csv log successfully reduced in size (%s)" % (csv))
                 return True
-        except:
+        except StandardError as e:
+            log.error('failed reducing CSV: %s', e)
             return False
         return False
 

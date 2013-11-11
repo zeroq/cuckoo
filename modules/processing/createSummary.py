@@ -442,7 +442,7 @@ class CreateNicerSummary(Processing):
 			fp.write(content.replace('\x00', ''))
 			fp.close()
 
-			with open(file_path, 'rb') as csvfile:
+			with open(file_path, 'rU') as csvfile:
 				#behaviorReader = csv.reader(csvfile, delimiter=',', quotechar='"')
 				behaviorReader = self.unicode_reader(csvfile, delimiter=',', quotechar='"')
 				while True:

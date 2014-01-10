@@ -407,7 +407,8 @@ class AnalysisManager(Thread):
                         o.write(line)
                         previousLine = copy.copy(line)
             if os.stat(csv+'.red').st_size > self.cfg.processing.analysis_size_limit:
-                raise CuckooAnalysisError("Analysis file %s is too big to be processed. Analysis aborted. You can process it manually" % csv)
+                log.warning("Analysis file %s is too big to be processed. Analysis aborted. You can process it manually", csv)
+                return False
             else:
                 os.rename(csv, csv+'.original')
                 os.rename(csv+'.red', csv)

@@ -1,9 +1,6 @@
 # Ignore Cuckoo Database
 db/cuckoo.db
 
-# ignore virustotal module
-modules/processing/virustotal.py 
-
 # Ignore Cuckoo logs
 log/*.log
 
@@ -12,6 +9,7 @@ storage/*
 
 # Ignore Python byte code
 *.pyc
+*.pyo
 
 # Ignore certificates
 *.pem

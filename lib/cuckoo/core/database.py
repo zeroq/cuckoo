@@ -252,8 +252,11 @@ class Task(Base):
     ###     internet:
     ###         0: emulated internet (default)
     ###         1: real internet via NAT
+    ###     filename:
+    ###         string: contain filename of uploaded file
     interaction = Column(Integer(), server_default="0", nullable=False)
     internet =  Column(Integer(), server_default="0", nullable=False)
+    filename = Column(Text(), nullable=True)
 
     sample = relationship("Sample", backref="tasks")
     guest = relationship("Guest", uselist=False, backref="tasks", cascade="save-update, delete")
@@ -635,7 +638,7 @@ class Database(object):
             session.close()
 
     # The following functions are mostly used by external utils.
-    ### JG: added interaction and internet parameters
+    ### JG: added interaction and internet parameters and filename
 
     def add(self,
             obj,
@@ -649,7 +652,8 @@ class Database(object):
             memory=False,
             enforce_timeout=False,
             interaction=0,
-            internet=0):
+            internet=0,
+            filename=""):
         """Add a task to database.
         @param file_path: sample path.
         @param timeout: selected timeout.
@@ -662,6 +666,7 @@ class Database(object):
         @param enforce_timeout: toggle full timeout execution.
         @param interaction: toggle automated and interactive analysis mode
         @param internet: toggle emulated or NATed internet
+        @param filename: filename
         @return: cursor or None.
         """
         session = self.Session()
@@ -705,9 +710,10 @@ class Database(object):
         task.memory = memory
         task.enforce_timeout = enforce_timeout
 
-        ### JG: added interaction and internet
+        ### JG: added interaction and internet and filename
         task.interaction = interaction
         task.internet = internet
+        task.filename = filename
 
         session.add(task)
 
@@ -721,7 +727,7 @@ class Database(object):
             session.close()
         return id
 
-    ### JG: added interaction and internet parameters
+    ### JG: added interaction and internet parameters and filename
     def add_path(self,
                  file_path,
                  timeout=0,
@@ -734,7 +740,8 @@ class Database(object):
                  memory=False,
                  enforce_timeout=False,
                  interaction=0,
-                 internet=0):
+                 internet=0,
+                 filename=""):
         """Add a task to database from file path.
         @param file_path: sample path.
         @param timeout: selected timeout.
@@ -747,6 +754,7 @@ class Database(object):
         @param enforce_timeout: toggle full timeout execution.
         @param interaction: toggle automated and interactive analysis mode
         @param internet: toggle emulated or NATed internet
+        @param filename: filename
         @return: cursor or None.
         """
         if not file_path or not os.path.exists(file_path):
@@ -763,7 +771,8 @@ class Database(object):
                         memory,
                         enforce_timeout,
                         interaction,
-                        internet)
+                        internet,
+                        filename)
 
     ### JG: added interaction and internet parameters
     def add_url(self,
@@ -829,6 +838,7 @@ class Database(object):
         @return: details on the task.
         """
         session = self.Session()
+        task = None
         try:
             if details:
                 task = session.query(Task).options(joinedload("guest"), joinedload("errors")).get(task_id)
@@ -837,7 +847,8 @@ class Database(object):
         except SQLAlchemyError:
             return None
         finally:
-            session.expunge(task)
+            if task:
+	        session.expunge(task)
             session.close()
         return task
 

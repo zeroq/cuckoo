@@ -381,8 +381,8 @@ class Analyzer:
         # We update the target according to its category. If it's a file, then
         # we store the path.
         if self.config.category == "file":
-            self.target = os.path.join(os.environ["TEMP"] + os.sep,
-                                       self.config.file_name)
+            #self.target = os.path.join(os.environ["TEMP"] + os.sep, self.config.file_name)
+            self.target = os.path.join(os.environ["TEMP"] + os.sep, self.config.filename)
         # If it's a URL, well.. we store the URL.
         else:
             self.target = self.config.target
@@ -446,7 +446,8 @@ class Analyzer:
             # If the analysis target is a file, we choose the package according
             # to the file format.
             if self.config.category == "file":
-                package = choose_package(self.config.file_type, self.config.file_name)
+                #package = choose_package(self.config.file_type, self.config.file_name)
+                package = choose_package(self.config.file_type, self.config.filename)
             # If it's an URL, we'll just use the default Internet Explorer
             # package.
             else:
@@ -493,7 +494,7 @@ class Analyzer:
             log.info("Disabling IE spawn due to interactive command shell")
             enableIEspawn = False
         else:
-            enableIEspawn = True
+            enableIEspawn = False
             start_time = time.time()
 
         # Initialize Auxiliary modules

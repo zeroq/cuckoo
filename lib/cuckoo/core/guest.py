@@ -163,7 +163,8 @@ class GuestManager:
                 data = xmlrpclib.Binary(file_data)
 
                 try:
-                    self.server.add_malware(data, options["file_name"])
+                    #self.server.add_malware(data, options["file_name"])
+                    self.server.add_malware(data, options["filename"])
                 except MemoryError as e:
                     raise CuckooGuestError("{0}: unable to upload malware to analysis machine, not enough memory".format(self.id))
 

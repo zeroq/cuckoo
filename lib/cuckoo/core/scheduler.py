@@ -157,6 +157,10 @@ class AnalysisManager(Thread):
         ### JG: added interaction and internet options
         options["interaction"] = int(self.task.interaction)
         options["internet"] = int(self.task.internet)
+	if "filename" in options and options["filename"] != '':
+	        options["filename"] = File(self.task.filename).get_name()
+	else:
+		options["filename"] = File(self.task.target).get_name()
 
         if not self.task.timeout or self.task.timeout == 0:
             options["timeout"] = self.cfg.timeouts.default
@@ -403,7 +407,7 @@ class AnalysisManager(Thread):
         try:
             with open(csv, 'r') as f, open(csv+'.red', 'w') as o:
                 for line in f:
-                    if line != previousLine: 
+                    if line != previousLine:
                         o.write(line)
                         previousLine = copy.copy(line)
             if os.stat(csv+'.red').st_size > self.cfg.processing.analysis_size_limit:

@@ -157,10 +157,7 @@ class AnalysisManager(Thread):
         ### JG: added interaction and internet options
         options["interaction"] = int(self.task.interaction)
         options["internet"] = int(self.task.internet)
-	if "filename" in options and options["filename"] != '':
-	        options["filename"] = File(self.task.filename).get_name()
-	else:
-		options["filename"] = File(self.task.target).get_name()
+        options["filename"] = File(self.task.filename).get_name()
 
         if not self.task.timeout or self.task.timeout == 0:
             options["timeout"] = self.cfg.timeouts.default

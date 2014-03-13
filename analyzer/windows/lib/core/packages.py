@@ -22,5 +22,7 @@ def choose_package(file_type, file_name):
         return "xls"
     elif "HTML" in file_type:
         return "html"
+    elif "zip archive" in file_type.lower():
+        return "zip"
     else:
         return None

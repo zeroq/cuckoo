@@ -27,6 +27,9 @@ class Persistence(Signature):
                 elif reg_path.lower().endswith("software\\microsoft\\windows\\currentversion\\runonce"):
                     if {"reg_path" : reg_hive+'\\'+reg_path} not in self.data:
                         self.data.append({"reg_path" : reg_hive+'\\'+reg_path})
+                elif reg_path.lower().endswith("software\\microsoft\\windows\\currentversion\\policies\\explorer\\run"):
+                    if {"reg_path" : reg_hive+'\\'+reg_path} not in self.data:
+                        self.data.append({"reg_path" : reg_hive+'\\'+reg_path})
         except StandardError as e:
             log.warning("persistence signature failed: %s" % (e))
             pass

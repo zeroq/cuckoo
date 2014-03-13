@@ -5,3 +5,6 @@
 include "embedded.yar"
 include "shellcodes.yar"
 include "vmdetect.yar"
+include "zbot.yar"
+include "apt1.yar"
+include "pbbot.yar"

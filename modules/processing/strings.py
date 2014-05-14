@@ -1,32 +1,38 @@
-# Copyright (C) 2010-2014 Cuckoo Foundation.
-# This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
-# See the file 'docs/LICENSE' for copying permission.
-
-import os.path
-import re
+import os
+import logging
 
 from lib.cuckoo.common.abstracts import Processing
-from lib.cuckoo.common.exceptions import CuckooProcessingError
+
+log = logging.getLogger(__name__)
 
 class Strings(Processing):
-    """Extract strings from analyzed file."""
+    """Get printable characters from a file."""
 
     def run(self):
-        """Run extract of printable strings.
-        @return: list of printable strings.
+        """Run printable character gathering.
+        @return: information dict.
         """
-        self.key = "strings"
-        strings = []
+        strings = {}
 
-        if self.task["category"] == "file":
-            if not os.path.exists(self.file_path):
-                raise CuckooProcessingError("Sample file doesn't exist: \"%s\"" % self.file_path)
+        if not os.path.exists(self.file_path):
+            return {}
 
-            try:
-                data = open(self.file_path, "r").read()
-            except (IOError, OSError) as e:
-                raise CuckooProcessingError("Error opening file %s" % e)
-            strings = re.findall("[\x1f-\x7e]{6,}", data)
-            strings += [str(ws.decode("utf-16le")) for ws in re.findall("(?:[\x1f-\x7e][\x00]){6,}", data)]
+        if not self.task["category"] == "file":
+            return {}
 
+        try:
+            import subprocess
+            """try to get ascii strings"""
+            strings_process = subprocess.Popen(['strings', '-a', '-n10', self.file_path], stdout = subprocess.PIPE)
+            ascii_strings = [item.strip() for item in strings_process.stdout.readlines()]
+
+            """try to get unicode strings"""
+            strings_process = subprocess.Popen(['strings', '-a', '-n10', '-el', self.file_path], stdout = subprocess.PIPE)
+            unicode_strings = [item.strip() for item in strings_process.stdout.readlines()]
+        except:
+            log.warning("failed to extract printable characters, skip")
+            return {}
+
+        strings["ascii"] = ascii_strings
+        strings["unicode"] = unicode_strings
         return strings

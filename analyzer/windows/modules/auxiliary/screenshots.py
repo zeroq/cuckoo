@@ -12,11 +12,11 @@ from lib.common.results import NetlogFile
 from lib.api.screenshot import Screenshot
 
 log = logging.getLogger(__name__)
-SHOT_DELAY = 1
+SHOT_DELAY = 10
 
 class Screenshots(Auxiliary, Thread):
     """Take screenshots."""
-    
+
     def __init__(self):
         Thread.__init__(self)
         self.do_run = True
@@ -59,10 +59,10 @@ class Screenshots(Auxiliary, Thread):
 
             # now upload to host from the StringIO
             nf = NetlogFile("shots/%s.jpg" % str(img_counter).rjust(4, "0"))
-            
+
             for chunk in tmpio:
                 nf.sock.sendall(chunk)
-            
+
             nf.close()
 
             img_last = img_current

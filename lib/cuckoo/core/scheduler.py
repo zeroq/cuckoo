@@ -8,6 +8,7 @@ import shutil
 import logging
 import Queue
 from threading import Thread, Lock
+import subprocess
 
 from lib.cuckoo.common.config import Config
 from lib.cuckoo.common.constants import CUCKOO_ROOT
@@ -182,6 +183,14 @@ class AnalysisManager(Thread):
         options["package"] = self.task.package
         options["options"] = self.task.options
         options["enforce_timeout"] = self.task.enforce_timeout
+
+        ### JG: added interaction, internet and filename options
+        options["interaction"] = int(self.task.interaction)
+        options["internet"] = int(self.task.internet)
+        if self.task.filename == None:
+            self.task.filename = self.task.target
+        options["filename"] = File(self.task.filename).get_name()
+
         options["clock"] = self.task.clock
 
         if not self.task.timeout or self.task.timeout == 0:
@@ -189,9 +198,13 @@ class AnalysisManager(Thread):
         else:
             options["timeout"] = self.task.timeout
 
-        if self.task.category == "file":
+        ### JG: added check for interaction mode
+        if self.task.category == "file" and options["interaction"] < 2:
             options["file_name"] = File(self.task.target).get_name()
             options["file_type"] = File(self.task.target).get_type()
+        else:
+            options["file_name"] = ""
+            options["file_type"] = ""
 
         return options
 
@@ -207,7 +220,8 @@ class AnalysisManager(Thread):
         if not self.init_storage():
             return False
 
-        if self.task.category == "file":
+        ### JG: added interaction
+        if self.task.category == "file" and self.task.interaction < 2:
             # Check whether the file has been changed for some unknown reason.
             # And fail this analysis if it has been modified.
             if not self.check_file():
@@ -227,12 +241,30 @@ class AnalysisManager(Thread):
         # Generate the analysis configuration file.
         options = self.build_options()
 
+        ### JG: added log output
+        if options['interaction'] > 0:
+            log.info("Starting analysis by interactive command shell or browser")
+
         # At this point we can tell the Resultserver about it.
         try:
             Resultserver().add_task(self.task, self.machine)
         except Exception as e:
             machinery.release(self.machine.label)
             self.errors.put(e)
+
+        ### JG: check if NAT should be enabled
+        if options["internet"]:
+            try:
+                pargs = ['/usr/bin/sudo', self.cfg.nat.enable]
+                enableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            except (OSError, ValueError) as e:
+                log.error("Failed to enable NAT" % (e))
+        else:
+            try:
+                pargs = ['/usr/bin/sudo', self.cfg.nat.disable]
+                disableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            except (OSError, ValueError) as e:
+                log.error("Failed to disable NAT" % (e))
 
         aux = RunAuxiliary(task=self.task, machine=self.machine)
         aux.start()
@@ -248,14 +280,30 @@ class AnalysisManager(Thread):
         except CuckooMachineError as e:
             log.error(str(e), extra={"task_id": self.task.id})
             dead_machine = True
+            ### JG: disable NAT
+            if options["internet"]:
+                try:
+                    pargs = ['/usr/bin/sudo', self.cfg.nat.disable]
+                    disableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                except (OSError, ValueError) as e:
+                    log.error("Failed to enable NAT: %s" % (e))
         else:
             try:
                 # Initialize the guest manager.
                 guest = GuestManager(self.machine.name, self.machine.ip, self.machine.platform)
                 # Start the analysis.
                 guest.start_analysis(options)
+                ### JG: added log output
+                log.info("guest initialization successfull.")
             except CuckooGuestError as e:
                 log.error(str(e), extra={"task_id": self.task.id})
+                ### JG: disable NAT
+                if options["internet"]:
+                    try:
+                        pargs = ['/usr/bin/sudo', self.cfg.nat.disable]
+                        disableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    except (OSError, ValueError) as e:
+                        log.error("Failed to enable NAT: %s" % (e))
             else:
                 # Wait for analysis completion.
                 try:
@@ -268,6 +316,14 @@ class AnalysisManager(Thread):
         finally:
             # Stop Auxiliary modules.
             aux.stop()
+
+            ### JG: disable NAT
+            if options["internet"]:
+                try:
+                    pargs = ['/usr/bin/sudo', self.cfg.nat.disable]
+                    disableNAT = subprocess.Popen(pargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                except (OSError, ValueError) as e:
+                    log.error("Failed to enable NAT: %s" % (e))
 
             # Take a memory dump of the machine before shutting it off.
             if self.cfg.cuckoo.memory_dump or self.task.memory:
@@ -324,9 +380,10 @@ class AnalysisManager(Thread):
 
     def process_results(self):
         """Process the analysis results and generate the enabled reports."""
-        results = RunProcessing(task_id=self.task.id).run()
+        ### JG: added interaction mode
+        results = RunProcessing(task_id=self.task.id, interaction=self.task.interaction).run()
         RunSignatures(results=results).run()
-        RunReporting(task_id=self.task.id, results=results).run()
+        RunReporting(task_id=self.task.id, results=results, interaction=self.task.interaction).run()
 
         # If the target is a file and the user enabled the option,
         # delete the original copy.
@@ -440,6 +497,11 @@ class Scheduler:
         else:
             log.info("Loaded %s machine/s", len(machinery.machines()))
 
+        ### JG: restore snapshot of all virtual machines
+        virtualMachinesList = machinery.machines()
+        for vm in virtualMachinesList:
+            machinery.restore_snapshot(vm.label)
+
     def stop(self):
         """Stop scheduler."""
         self.running = False
@@ -460,56 +522,66 @@ class Scheduler:
 
         # This loop runs forever.
         while self.running:
-            time.sleep(1)
-
-            # If not enough free diskspace is available, then we print an
-            # error message and wait another round (this check is ignored
-            # when freespace is set to zero).
-            if self.cfg.cuckoo.freespace:
-                # Resolve the full base path to the analysis folder, just in
-                # case somebody decides to make a symlink out of it.
-                dir_path = os.path.join(CUCKOO_ROOT, "storage", "analyses")
-
-                # TODO: Windows support
-                if hasattr(os, "statvfs"):
-                    dir_stats = os.statvfs(dir_path)
-
-                    # Free diskspace in megabytes.
-                    space_available = dir_stats.f_bavail * dir_stats.f_frsize
-                    space_available /= 1024 * 1024
-
-                    if space_available < self.cfg.cuckoo.freespace:
-                        log.error("Not enough free diskspace! (Only %d MB!)",
-                                  space_available)
-                        continue
-
-            # If no machines are available, it's pointless to fetch for
-            # pending tasks. Loop over.
-            if machinery.availables() == 0:
-                continue
-
-            # Exits if max_analysis_count is defined in config file and
-            # is reached.
-            if maxcount and total_analysis_count >= maxcount:
-                if active_analysis_count <= 0:
-                    self.stop()
-            else:
-                # Fetch a pending analysis task.
-                task = self.db.fetch()
-
-                if task:
-                    log.debug("Processing task #%s", task.id)
-                    total_analysis_count += 1
-
-                    # Initialize the analysis manager.
-                    analysis = AnalysisManager(task, errors)
-                    # Start.
-                    analysis.start()
-
-            # Deal with errors.
+            ### JG: added try except to catch keyboard interrrupt and restore VMs
             try:
-                error = errors.get(block=False)
-            except Queue.Empty:
-                pass
-            else:
-                raise error
+                time.sleep(1)
+
+                # If not enough free diskspace is available, then we print an
+                # error message and wait another round (this check is ignored
+                # when freespace is set to zero).
+                if self.cfg.cuckoo.freespace:
+                    # Resolve the full base path to the analysis folder, just in
+                    # case somebody decides to make a symlink out of it.
+                    dir_path = os.path.join(CUCKOO_ROOT, "storage", "analyses")
+
+                    # TODO: Windows support
+                    if hasattr(os, "statvfs"):
+                        dir_stats = os.statvfs(dir_path)
+
+                        # Free diskspace in megabytes.
+                        space_available = dir_stats.f_bavail * dir_stats.f_frsize
+                        space_available /= 1024 * 1024
+
+                        if space_available < self.cfg.cuckoo.freespace:
+                            log.error("Not enough free diskspace! (Only %d MB!)",
+                                      space_available)
+                            continue
+
+                # If no machines are available, it's pointless to fetch for
+                # pending tasks. Loop over.
+                if machinery.availables() == 0:
+                    continue
+
+                # Exits if max_analysis_count is defined in config file and
+                # is reached.
+                if maxcount and total_analysis_count >= maxcount:
+                    if active_analysis_count <= 0:
+                        self.stop()
+                else:
+                    # Fetch a pending analysis task.
+                    task = self.db.fetch()
+
+                    if task:
+                        log.debug("Processing task #%s", task.id)
+                        total_analysis_count += 1
+
+                        # Initialize the analysis manager.
+                        analysis = AnalysisManager(task, errors)
+                        # Start.
+                        analysis.start()
+
+                # Deal with errors.
+                try:
+                    error = errors.get(block=False)
+                except Queue.Empty:
+                    pass
+                else:
+                    raise error
+            except KeyboardInterrupt:
+                log.info("keyboard interrupt")
+                break
+        ### JG: restore snapshots of all virtual machines
+        virtualMachinesList = machinery.machines()
+        for vm in virtualMachinesList:
+            machinery.restore_snapshot(vm.label)
+        log.info("back for good ...")

@@ -30,7 +30,7 @@ RESULTS_FOLDER = ""
 
 class Agent:
     """Cuckoo agent, it runs inside guest."""
-    
+
     def __init__(self):
         self.system = platform.system().lower()
         self.analyzer_path = ""
@@ -115,6 +115,12 @@ class Agent:
         config = ConfigParser.RawConfigParser()
         config.add_section("analysis")
 
+        ### JG: added interaction
+        if options["interaction"] < 1 or options["interaction"] > 4:
+            self.interaction = 0
+        else:
+            self.interaction = options["interaction"]
+
         try:
             for key, value in options.items():
                 # Options can be UTF encoded.
@@ -127,7 +133,7 @@ class Agent:
                 config.set("analysis", key, value)
 
             config_path = os.path.join(ANALYZER_FOLDER, "analysis.conf")
-        
+
             with open(config_path, "wb") as config_file:
                 config.write(config_file)
         except Exception as e:
@@ -169,6 +175,11 @@ class Agent:
         if not self.analyzer_path or not os.path.exists(self.analyzer_path):
             return False
 
+        ### JG: insert wait for interactive file analysis (wait for user to connect via VNC)
+        if self.interaction == 1:
+            raw_input("Interactive analysis process. Press enter to continue ...")
+            print("Continuing analysis process.")
+
         try:
             proc = subprocess.Popen([sys.executable, self.analyzer_path],
                                     cwd=os.path.dirname(self.analyzer_path))
@@ -185,7 +196,7 @@ class Agent:
         """Complete analysis.
         @param success: success status.
         @param error: error status.
-        """ 
+        """
         global ERROR_MESSAGE
         global CURRENT_STATUS
         global RESULTS_FOLDER

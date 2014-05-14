@@ -6,10 +6,13 @@ import os
 import json
 import urllib
 import urllib2
+import logging
 
 from lib.cuckoo.common.abstracts import Processing
 from lib.cuckoo.common.exceptions import CuckooProcessingError
 from lib.cuckoo.common.objects import File
+
+log = logging.getLogger(__name__)
 
 VIRUSTOTAL_FILE_URL = "https://www.virustotal.com/vtapi/v2/file/report"
 VIRUSTOTAL_URL_URL = "https://www.virustotal.com/vtapi/v2/url/report"
@@ -42,22 +45,32 @@ class VirusTotal(Processing):
         data = urllib.urlencode({"resource": resource, "apikey": key})
 
         try:
+            if self.options.get("proxy", None):
+                log.debug("using proxy for connection to virustotal: %s %s:%s" % (self.options.get("pprotocol"), self.options.get("pserver"), self.options.get("pport")))
+                proxy = urllib2.ProxyHandler({'%s' % (self.options.get("pprotocol")): '%s:%s' % (self.options.get("pserver"), self.options.get("pport"))})
+                opener = urllib2.build_opener(proxy)
+                urllib2.install_opener(opener)
             request = urllib2.Request(url, data)
             response = urllib2.urlopen(request)
             response_data = response.read()
         except urllib2.URLError as e:
-            raise CuckooProcessingError("Unable to establish connection "
-                                        "to VirusTotal: {0}".format(e))
+            #raise CuckooProcessingError("Unable to establish connection to VirusTotal: {0}".format(e))
+            log.error("Unable to establish connection to VirusTotal: %s" % e)
+            return virustotal
         except urllib2.HTTPError as e:
-            raise CuckooProcessingError("Unable to perform HTTP request to "
-                                        "VirusTotal "
-                                        "(http code={0})".format(e.code))
+            #raise CuckooProcessingError("Unable to perform HTTP request to VirusTotal (http code={0})".format(e.code))
+            log.error("Unable to perform HTTP request to VirusTotal (http code=%s)" % e.code)
+            return virustotal
 
         try:
             virustotal = json.loads(response_data)
         except ValueError as e:
-            raise CuckooProcessingError("Unable to convert response to "
-                                        "JSON: {0}".format(e))
+            #raise CuckooProcessingError("Unable to convert response to JSON: {0}".format(e))
+            log.error("Unable to convert response to JSON: {0}".format(e))
+            return virustotal
+        except StandardError as e:
+            log.error("VirusTotal Error: %s" % (e))
+            return virustotal
 
         if "scans" in virustotal:
             items = virustotal["scans"].items()

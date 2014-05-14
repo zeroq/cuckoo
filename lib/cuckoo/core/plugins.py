@@ -135,11 +135,13 @@ class RunProcessing(object):
     is then passed over the reporting engine.
     """
 
-    def __init__(self, task_id):
+    def __init__(self, task_id, interaction=0):
         """@param task_id: ID of the analyses to process."""
         self.task = Database().view_task(task_id).to_dict()
         self.analysis_path = os.path.join(CUCKOO_ROOT, "storage", "analyses", str(task_id))
         self.cfg = Config(cfg=os.path.join(CUCKOO_ROOT, "conf", "processing.conf"))
+        ### JG: added interaction mode
+        self.interaction = interaction
 
     def process(self, module):
         """Run a processing module.
@@ -169,6 +171,7 @@ class RunProcessing(object):
 
         # If the processing module is disabled in the config, skip it.
         if not options.enabled:
+            log.warning("Processing Module not enabled: %s" % (current.__class__.__name__))
             return None
 
         # Give it path to the analysis results.
@@ -178,17 +181,26 @@ class RunProcessing(object):
         # Give it the options from the relevant processing.conf section.
         current.set_options(options)
 
+        ### JG: added set interaction mode
+        current.set_interaction_mode(self.interaction)
+
         try:
             # Run the processing module and retrieve the generated data to be
             # appended to the general results container.
             data = current.run()
 
-            log.debug("Executed processing module \"%s\" on analysis at "
-                      "\"%s\"", current.__class__.__name__, self.analysis_path)
 
-            # If succeeded, return they module's key name and the data to be
-            # appended to it.
-            return {current.key: data}
+            ### JG: allow to return nothing
+            if data != None:
+                log.debug("Executed processing module \"%s\" on analysis at "
+                          "\"%s\"", current.__class__.__name__, self.analysis_path)
+
+                # If succeeded, return they module's key name and the data to be
+                # appended to it.
+                return {current.key: data}
+            else:
+                log.info("Execution of processing module \"%s\" on analysis at \"%s\" provided no results"
+                        % (current.__class__.__name__, self.analysis_path))
         except CuckooDependencyError as e:
             log.warning("The processing module \"%s\" has missing dependencies: %s", current.__class__.__name__, e)
         except CuckooProcessingError as e:
@@ -401,7 +413,7 @@ class RunSignatures(object):
                             matched.append(sig.as_result())
                             if sig in complete_list:
                                 complete_list.remove(sig)
-                        
+
                         # Either True or False, we don't need to check this sig anymore.
                         evented_list.remove(sig)
                         del sig
@@ -452,12 +464,14 @@ class RunReporting:
     Engine and pass it over to the reporting modules before executing them.
     """
 
-    def __init__(self, task_id, results):
+    def __init__(self, task_id, results, interaction=0):
         """@param analysis_path: analysis folder path."""
         self.task = Database().view_task(task_id).to_dict()
         self.results = results
         self.analysis_path = os.path.join(CUCKOO_ROOT, "storage", "analyses", str(task_id))
         self.cfg = Config(cfg=os.path.join(CUCKOO_ROOT, "conf", "reporting.conf"))
+        ### JG: added interaction mode
+        self.interaction = interaction
 
     def process(self, module):
         """Run a single reporting module.
@@ -494,6 +508,9 @@ class RunReporting:
         current.set_options(options)
         # Load the content of the analysis.conf file.
         current.cfg = Config(current.conf_path)
+
+        ### JG: added set interaction mode
+        current.set_interaction_mode(self.interaction)
 
         try:
             current.run(self.results)

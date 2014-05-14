@@ -35,6 +35,9 @@ class GuestManager:
         self.ip = ip
         self.platform = platform
 
+        ### JG: global interaction state
+        self.interaction = 0
+
         self.cfg = Config()
         self.timeout = self.cfg.timeouts.critical
 
@@ -132,6 +135,14 @@ class GuestManager:
         """
         log.info("Starting analysis on guest (id=%s, ip=%s)", self.id, self.ip)
 
+        ### JG: modified file to start if interactive command shell requested
+        self.interaction = options["interaction"]
+        if options["interaction"] == 2:
+            options["file_name"] = options["target"]
+
+        ### JG: display analysis options
+        log.info("Analysis Options: %s" % (options))
+
         # TODO: deal with unicode URLs.
         if options["category"] == "file":
             options["file_name"] = sanitize_filename(options["file_name"])
@@ -152,7 +163,8 @@ class GuestManager:
                                        "analysis machine".format(self.id))
 
             # If the target of the analysis is a file, upload it to the guest.
-            if options["category"] == "file":
+            ### JG: added check for interaction mode (only automated and interactive file analysis)
+            if options["category"] == "file" and options["interaction"] < 2:
                 try:
                     file_data = open(options["target"], "rb").read()
                 except (IOError, OSError) as e:
@@ -162,14 +174,20 @@ class GuestManager:
                 data = xmlrpclib.Binary(file_data)
 
                 try:
-                    self.server.add_malware(data, options["file_name"])
+                    ### JG: switched to own filename string
+                    if "filename" in options and len(options["filename"])>0:
+                        log.info("File uploaded as: %s" % (sanitize_filename(options["filename"])))
+                        self.server.add_malware(data, sanitize_filename(options["filename"]))
+                    else:
+                        log.info("File uploaded as: %s" % (options["file_name"]))
+                        self.server.add_malware(data, options["file_name"])
                 except Exception as e:
                     raise CuckooGuestError("{0}: unable to upload malware to "
                                            "analysis machine: {1}".format(self.id, e))
 
             # Launch the analyzer.
             pid = self.server.execute()
-            log.debug("%s: analyzer started with PID %d", self.id, pid)
+            log.info("%s: analyzer started with PID %d", self.id, pid)
         # If something goes wrong when establishing the connection, raise an
         # exception and abort the analysis.
         except (socket.timeout, socket.error):
@@ -194,21 +212,32 @@ class GuestManager:
         timer.start()
         self.server._set_timeout(self.timeout)
 
+
+        ### JG: added Error Counter
+        errorCounter = 0
         while True:
             time.sleep(1)
 
             # If the analysis hits the critical timeout, just return straight
             # straight away and try to recover the analysis results from the
             # guest.
-            if abort.is_set():
-                raise CuckooGuestError("The analysis hit the critical timeout,"
-                                       " terminating")
+            if abort.is_set() and self.interaction < 2:
+                ### JG: modified
+                log.error("%s: the analysis hit the critical timeout, aborted" % self.id)
+                break
+                #raise CuckooGuestError("The analysis hit the critical timeout, terminating")
 
             try:
                 status = self.server.get_status()
             except Exception as e:
                 log.debug("%s: error retrieving status: %s", self.id, e)
+                errorCounter += 1
                 continue
+
+            ### JG: check error counter
+            if errorCounter > 50:
+                log.error("%s: error counter reached critical value, aborting" % (self.id))
+                break
 
             # React according to the returned status.
             if status == CUCKOO_GUEST_COMPLETED:

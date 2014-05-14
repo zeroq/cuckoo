@@ -12,6 +12,7 @@ import logging
 import hashlib
 import xmlrpclib
 import traceback
+import time
 from ctypes import create_unicode_buffer, create_string_buffer
 from ctypes import c_wchar_p, byref, c_int, sizeof
 from threading import Lock, Thread
@@ -83,7 +84,12 @@ def dump_file(file_path):
     """Create a copy of the give file path."""
     try:
         if os.path.exists(file_path):
-            sha256 = hashlib.sha256(open(file_path, "rb").read()).hexdigest()
+            ### JG: added try except because of permission denied
+            try:
+                sha256 = hashlib.sha256(open(file_path, "rb").read()).hexdigest()
+            except StandardError as e:
+                log.warning("Failed getting hash: %s", e)
+                return
             if sha256 in DUMPED_LIST:
                 # The file was already dumped, just skip.
                 return
@@ -99,7 +105,7 @@ def dump_file(file_path):
     name = c_wchar_p()
     KERNEL32.GetFullPathNameW(file_path, 32 * 1024, path, byref(name))
     file_path = path.value
-    
+
     # Check if the path has a valid file name, otherwise it's a directory
     # and we should abort the dump.
     if name.value:
@@ -187,7 +193,7 @@ class PipeHandler(Thread):
             #elif not success or bytes_read.value == 0:
             #    if KERNEL32.GetLastError() == ERROR_BROKEN_PIPE:
             #        pass
-            
+
             break
 
         if data:
@@ -502,7 +508,8 @@ class Analyzer:
             # If the analysis target is a file, we choose the package according
             # to the file format.
             if self.config.category == "file":
-                package = choose_package(self.config.file_type, self.config.file_name)
+                ### JG: run with original filename, but with removed special chars
+                package = choose_package(self.config.file_type, self.config.filename)
             # If it's an URL, we'll just use the default Internet Explorer
             # package.
             else:
@@ -515,6 +522,8 @@ class Analyzer:
                                   "type: {0}".format(self.config.file_type))
 
             log.info("Automatically selected analysis package \"%s\"", package)
+            ### JG: write package back to config
+            self.config.package = package
         # Otherwise just select the specified package.
         else:
             package = self.config.package
@@ -543,6 +552,14 @@ class Analyzer:
         # Initialize the analysis package.
         pack = package_class(self.get_options())
 
+        ### JG: disable timer if interactive command shell
+        if self.config.interaction != 0:
+            log.info("Disabling IE spawn due to interactive command shell mode")
+            enableIEspawn = False
+        else:
+            enableIEspawn = False
+            start_time = time.time()
+
         # Initialize Auxiliary modules
         Auxiliary()
         prefix = auxiliary.__name__ + "."
@@ -559,23 +576,25 @@ class Analyzer:
 
         # Walk through the available auxiliary modules.
         aux_enabled = []
-        for module in Auxiliary.__subclasses__():
-            # Try to start the auxiliary module.
-            try:
-                aux = module()
-                aux.start()
-            except (NotImplementedError, AttributeError):
-                log.warning("Auxiliary module %s was not implemented",
-                            aux.__class__.__name__)
-                continue
-            except Exception as e:
-                log.warning("Cannot execute auxiliary module %s: %s",
-                            aux.__class__.__name__, e)
-                continue
-            finally:
-                log.info("Started auxiliary module %s",
-                         aux.__class__.__name__)
-                aux_enabled.append(aux)
+        ### JG: disable auxiliary modules in case of interactive analysis
+        if self.config.interaction == 0:
+            for module in Auxiliary.__subclasses__():
+                # Try to start the auxiliary module.
+                try:
+                    aux = module()
+                    aux.start()
+                except (NotImplementedError, AttributeError):
+                    log.warning("Auxiliary module %s was not implemented",
+                                aux.__class__.__name__)
+                    continue
+                except Exception as e:
+                    log.warning("Cannot execute auxiliary module %s: %s",
+                                aux.__class__.__name__, e)
+                    continue
+                finally:
+                    log.info("Started auxiliary module %s",
+                             aux.__class__.__name__)
+                    aux_enabled.append(aux)
 
         # Start analysis package. If for any reason, the execution of the
         # analysis package fails, we have to abort the analysis.
@@ -591,6 +610,14 @@ class Analyzer:
             raise CuckooError("The package \"{0}\" start function encountered "
                               "an unhandled exception: "
                               "{1}".format(package_name, e))
+
+        ### JG: maintain intial pid(s) list in interactive modes and close monitoring if all of them are gone
+        initialPIDs = []
+        if pids:
+            if type(pids) == list:
+                initialPIDs = initialPIDs + pids
+            else:
+                initialPIDs.append(pids)
 
         # If the analysis package returned a list of process IDs, we add them
         # to the list of monitored processes and enable the process monitor.
@@ -613,9 +640,13 @@ class Analyzer:
 
         time_counter = 0
 
+        ### JG: flag that last minutes are running from reduced timer
+        wait_mode = False
+
         while True:
             time_counter += 1
-            if time_counter == int(self.config.timeout):
+            ### JG: added interaction check
+            if time_counter == int(self.config.timeout) and self.config.interaction == 0:
                 log.info("Analysis timeout hit, terminating analysis")
                 break
 
@@ -627,6 +658,14 @@ class Analyzer:
                 continue
 
             try:
+                ### JG: check if IE should be spawned
+                if enableIEspawn:
+                    elapsed_time = time.time() - start_time
+                    if elapsed_time >= 30.0:
+                        log.info("automatically spawning IE")
+                        p = Process()
+                        p.execute(path=os.path.join(os.getenv("ProgramFiles"), "Internet Explorer", "iexplore.exe"), args="\"http://www.google.de\"", suspended=False)
+                        enableIEspawn = False
                 # If the process monitor is enabled we start checking whether
                 # the monitored processes are still alive.
                 if pid_check:
@@ -634,6 +673,11 @@ class Analyzer:
                         if not Process(pid=pid).is_alive():
                             log.info("Process with pid %s has terminated", pid)
                             PROCESS_LIST.remove(pid)
+                            log.info("%s" % (PROCESS_LIST))
+                            ### JG: in interactive mode check if an initial pid terminated
+                            if self.config.interaction != 0 and pid in initialPIDs:
+                                log.info("Interactive Mode: initial PID terminated -> terminating analysis ...")
+                                break
 
                     # If none of the monitored processes are still alive, we
                     # can terminate the analysis.
@@ -641,6 +685,14 @@ class Analyzer:
                         log.info("Process list is empty, "
                                  "terminating analysis...")
                         break
+                        ### JG: set timer to one minute (run analysis a little longer in case some process was injected that is not monitored)
+                        #wait_mode = True
+                        #if int(self.config.timeout)>60:
+                        #    time_counter = int(self.config.timeout)-60
+                        #    log.info("wait another 60 seconds if something happens ...")
+                        #else:
+                        #    ### not enough analysis time configured
+                        #    break
 
                     # Update the list of monitored processes available to the
                     # analysis package. It could be used for internal

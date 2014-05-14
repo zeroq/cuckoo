@@ -5,3 +5,6 @@
 include "signatures/embedded.yar"
 //include "signatures/shellcodes.yar"
 include "signatures/vmdetect.yar"
+include "signatures/apt1.yar"
+include "signatures/pbbot.yar"
+include "signatures/zbot.yar"

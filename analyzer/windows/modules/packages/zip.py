@@ -3,11 +3,14 @@
 # See the file 'docs/LICENSE' for copying permission.
 
 import os
+import logging
 from zipfile import ZipFile, BadZipfile
 
 from lib.common.abstracts import Package
 from lib.common.exceptions import CuckooPackageError
 from lib.api.process import Process
+
+log = logging.getLogger(__name__)
 
 class Zip(Package):
     """Zip analysis package."""
@@ -15,9 +18,19 @@ class Zip(Package):
     def start(self, path):
         root = os.environ["TEMP"]
         password = self.options.get("password", None)
-        default_file_name = "sample.exe"   
+        default_file_name = "sample.exe"
 
+        start_as = "sample.exe"
         with ZipFile(path, "r") as archive:
+            try:
+                ### JG: added finding filename of executable in provided zip file
+                for item in archive.filelist:
+                    fname = item.filename
+                    if fname.endswith('.exe') or fname.endswith('.bat') or fname.endswith('.com'):
+                        start_as = fname
+                        break
+            except StandardError as e:
+                raise CuckooPackageError("Unable to get executable file from zip (%s)" % (e))
             zipinfos = archive.infolist()
             try:
                 archive.extractall(path=root, pwd=password)
@@ -31,13 +44,7 @@ class Zip(Package):
                     raise CuckooPackageError("Unable to extract Zip file: "
                                              "{0}".format(e))
 
-        file_name = self.options.get("file", default_file_name)
-        if file_name == default_file_name:   
-            #no name provided try to find a better name
-            if len(zipinfos) > 0:
-                #take the first one
-                file_name = zipinfos[0].filename
-
+        file_name = self.options.get("file", start_as)
         file_path = os.path.join(root, file_name)
 
         dll = self.options.get("dll", None)

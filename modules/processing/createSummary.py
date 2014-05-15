@@ -164,7 +164,7 @@ class CreateNicerSummary(Processing):
             if item.lower().startswith("registry->"):
                 registry = item.split('->')[1].lower()
             elif item.lower().startswith("subkey->"):
-                regpath = item.split('->')[1]
+                regpath = item.split('->')[1].replace('\\\\', '\\')
             elif item.lower().startswith("access->"):
                 access = item.split('->')[1]
             elif item.lower().startswith("handle->"):

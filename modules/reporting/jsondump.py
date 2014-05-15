@@ -32,6 +32,7 @@ class JsonDump(Report):
 
         ###JG: add splitted report
         try:
+            obj = None
             reportFile = os.path.join(self.reports_path, "report.json")
             if os.path.exists(reportFile) and not failure:
                 try:
@@ -39,6 +40,7 @@ class JsonDump(Report):
                     obj = json.load(report)
                     report.close()
                 except ValueError as e:
+                    log.warning("json malformed trying something ... : %s" % (e))
                     report = codecs.open(reportFile, "r", "utf-8")
                     pjson = report.read()
                     pjson = pjson.replace('"calls":','"calls": [')
@@ -52,19 +54,24 @@ class JsonDump(Report):
                                 nres.append('"calls": [')
                             nres.append(line)
                         tc = "\n".join(nres)
-                        obj = json.loads(tc)
+                        try:
+                            obj = json.loads(tc)
+                        except StandardError as e:
+                            log.warning("failed splitting json report ...")
+                            obj = None
                     report.close()
+                if obj:
+                    dest = os.path.join(self.reports_path, "jsonparts")
+                    if not os.path.exists(dest):
+                        os.makedirs(dest)
 
-                dest = os.path.join(self.reports_path, "jsonparts")
-                if not os.path.exists(dest):
-                    os.makedirs(dest)
-
-                for k in obj.keys():
-                    partName = os.path.join(dest, k+'.json')
-                    fp = codecs.open(partName, 'w', "utf-8")
-                    json.dump(obj[k], fp)
-                    fp.close()
-            else:
+                    for k in obj.keys():
+                        partName = os.path.join(dest, k+'.json')
+                        fp = codecs.open(partName, 'w', "utf-8")
+                        json.dump(obj[k], fp)
+                        fp.close()
+                    return
+            if not obj:
                 ### try to work on results
                 dest = os.path.join(self.reports_path, "jsonparts")
                 if not os.path.exists(dest):

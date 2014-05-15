@@ -22,6 +22,8 @@ class Screenshots(Auxiliary, Thread):
     def __init__(self):
         Thread.__init__(self)
         self.do_run = True
+        ### JG: added name
+        self.name = "screenshot"
 
     def stop(self):
         """Stop screenshotting."""

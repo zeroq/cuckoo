@@ -516,7 +516,10 @@ class Analyzer:
             # Try to start the auxiliary module.
             try:
                 aux = auxiliary()
-                aux.start()
+                if aux.name == 'human' and self.config.interaction != 0:
+                    aux.stop()
+                else:
+                    aux.start()
             except (NotImplementedError, AttributeError):
                 log.warning("Auxiliary module %s was not implemented", aux.__class__.__name__)
                 continue
@@ -569,12 +572,13 @@ class Analyzer:
         time_counter = 0
 
         ### JG: flag that last minutes are running from reduced timer
-        wait_mode = False
+        wait_mode = True
+        wait_active = True
 
         while True:
             time_counter += 1
             ### JG: added interaction check
-            if time_counter == int(self.config.timeout) and self.config.interaction == 0:
+            if time_counter >= int(self.config.timeout) and self.config.interaction == 0:
                 log.info("Analysis timeout hit, terminating analysis")
                 break
 
@@ -610,16 +614,15 @@ class Analyzer:
                     # If none of the monitored processes are still alive, we
                     # can terminate the analysis.
                     if len(PROCESS_LIST) == 0:
-                        log.info("Process list is empty, terminating analysis...")
-                        break
                         ### JG: set timer to one minute
-                        #wait_mode = True
-                        #if int(self.config.timeout)>60:
-                        #    time_counter = int(self.config.timeout)-60
-                        #    log.info("wait another 60 seconds if something happens ...")
-                        #else:
-                        #    ### not enough time configured
-                        #    break
+                        if wait_mode:
+                            if wait_active and int(self.config.timeout)>60:
+                                wait_active = False
+                                time_counter = int(self.config.timeout)-60
+                                log.info("wait another 60 seconds if something happens ...")
+                        else:
+                            log.info("Process list is empty, terminating analysis...")
+                            break
 
                     # Update the list of monitored processes available to the
                     # analysis package. It could be used for internal operations

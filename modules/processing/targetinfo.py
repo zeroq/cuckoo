@@ -25,7 +25,7 @@ class TargetInfo(Processing):
             # filename if the file is not available anymore
             if os.path.exists(self.file_path):
                 target_info["file"] = File(self.file_path).get_all()
-
+                target_info["file"]["filename"] = self.task["filename"]
             target_info["file"]["name"] = File(self.task["target"]).get_name()
         elif self.task["category"] == "url":
             target_info["url"] = self.task["target"]

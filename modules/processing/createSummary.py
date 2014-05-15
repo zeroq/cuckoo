@@ -11,10 +11,6 @@ from lib.cuckoo.common.utils import convert_to_printable
 
 log = logging.getLogger(__name__)
 
-###              0                  1                    2                  3      4        5             6         7     8                9                 10                        11                         12                     13
-### 1.2 "2014-05-14 13:43:17,870","592","Abo_Rechnung_vom_12.05.2014.com","1268","428","filesystem","NtCreateFile","0","3221225524","ShareAccess->3","FileName->c:\\MyApp.eXE","DesiredAccess->0x80100080","CreateDisposition->1","FileHandle->0x00000000"
-### 0.6 "2014-05-14 09:32:45,536","256","Abo_Rechnung_vom_12.05.2014.com","412","1876","filesystem","NtCreateFile","0","3221225524","FileHandle->0x00000000","DesiredAccess->0x80100080","FileName->\??\c:\MyApp.eXE","CreateDisposition->1","ShareAccess->3"
-
 class CreateNicerSummary(Processing):
     order = 3
 
@@ -42,8 +38,7 @@ class CreateNicerSummary(Processing):
             "33554432": "MAXIMUM_ALLOWED",
             "0x2000000": "MAXIMUM_ALLOWED",
             "983103": "ALL_ACCESS",
-            "131097": "READ",
-            "131097": "EXECUTE",
+            "131097": "READ_EXECUTE",
             "131078": "WRITE",
             "131103": "ALL_ACCESS"
         }
@@ -72,6 +67,31 @@ class CreateNicerSummary(Processing):
             "5": "REG_ACCESS_DENIED",
             "259": "ERROR_NO_MORE_ITEMS"
         }
+
+        self.SERVICE_SC_MAPPING = {
+            "1": "SC_MANAGER_CONNECT",
+            "2": "SC_MANAGER_CREATE_SERVICE",
+            "4": "SC_MANAGER_ENUMERATE_SERVICE",
+            "983103": "SC_MANAGER_ALL_ACCESS",
+            "2147483648": "GENERIC_READ"
+        }
+
+        self.SERVICE_OPEN_MAPPING = {
+            "4": "SERVICE_QUERY_STATUS",
+            "5": "ACCESS_DENIED",
+            "983551": "SERVICE_ALL_ACCESS"
+        }
+
+        self.SERVICE_CONTROL_MAPPING = {
+            "1": "SERVICE_CONTROL_STOP",
+            "2": "SERVICE_CONTROL_PAUSE"
+        }
+
+        self.SERVICE_STATUS_MAPPING = {
+            "0": "FAILED",
+            "1": "SUCCESS"
+        }
+
 
     def convertAccessMode(self, accessmode, ftype):
         modes = []
@@ -135,6 +155,36 @@ class CreateNicerSummary(Processing):
 
         return "%s - %s - %s" % (bitVector,accessmode, positions), modes
 
+    def getRegValues(self, parts):
+        regpath = None
+        registry = None
+        access = None
+        handle = None
+        for item in parts:
+            if item.lower().startswith("registry->"):
+                registry = item.split('->')[1].lower()
+            elif item.lower().startswith("subkey->"):
+                regpath = item.split('->')[1]
+            elif item.lower().startswith("access->"):
+                access = item.split('->')[1]
+            elif item.lower().startswith("handle->"):
+                handle = item.split('->')[1]
+        return regpath, registry, access, handle
+
+    def getKeyAndValue(self, parts):
+        regkey = None
+        regtype = None
+        regbuffer = None
+        for item in parts:
+            if item.lower().startswith("valuename->"):
+                regkey = item.split('->')[1]
+            elif item.lower().startswith("type->"):
+                regtype = item.split('->')[1]
+            elif item.lower().startswith("buffer->"):
+                regbuffer = item.split('->')[1]
+        return regkey, regtype, regbuffer
+
+
     def handleRegistry(self, row, registryDict):
         item = None
         if (row[6].lower() == 'regcreatekeyexa' or row[6].lower() == 'regcreatekeyexw') and len(row) >= 13:
@@ -144,25 +194,23 @@ class CreateNicerSummary(Processing):
             api = row[6]
             status = row[7]
             failurecode = row[8].strip()
-            regpath = row[10].split('->')[1]
+            regpath, registry, access, handle = self.getRegValues(row[9:])
             try:
                 failuremessage = self.REG_STATUS_MAPPING[failurecode]
             except:
                 failuremessage = failurecode
             try:
-                hive = self.REGISTRY_MAPPING[row[9].split('->')[1].lower()]
+                hive = self.REGISTRY_MAPPING[registry]
             except StandardError as e:
-                hive = row[9].split('->')[1].lower()
+                hive = registry
                 if hive in registryDict['inProgress']:
                     oitem = registryDict['inProgress'][hive]
                     hive = oitem['hive']
                     regpath = "%s\\%s" % (oitem['path'], regpath)
-            access = row[12].split('->')[1]
             try:
                 accessmode = self.REG_ACCESS_MAPPING[access.lower()]
             except:
                 accessmode = access.lower()
-            handle = row[13].split('->')[1]
             item = {"api": [api], "method": "read", "hive": hive, "status": [status], "statusmessage": [failuremessage], "path": regpath, "handle": handle, "access": accessmode, "key": [''], "type": [''], "value": [''], "data": ['']}
             if int(failurecode) == 0:
                 registryDict['inProgress'][handle] = item
@@ -172,13 +220,13 @@ class CreateNicerSummary(Processing):
             check for registry close key
             """
             api = row[6]
-            handle = row[9].split('->')[1]
+            regpath, registry, access, handle = self.getRegValues(row[9:])
             item = registryDict['inProgress'].pop(handle, None)
             if item:
                 item['api'].append(api)
                 if not item.has_key("method"):
                     item['method'] = 'read'
-        elif (row[6].lower() == 'regsetvalueexw' or row[6].lower() == 'regsetvalueexa') and len(row) >= 12 and row[9].split('->')[1] in registryDict['inProgress']:
+        elif (row[6].lower() == 'regsetvalueexw' or row[6].lower() == 'regsetvalueexa') and len(row) >= 12:
             """
             check for registry set value
             """
@@ -189,13 +237,14 @@ class CreateNicerSummary(Processing):
                 failuremessage = self.REG_STATUS_MAPPING[failurecode]
             except:
                 failuremessage = failurecode
-            handle = row[9].split('->')[1]
-            item = registryDict['inProgress'][handle]
+            regpath, registry, access, handle = self.getRegValues(row[9:])
+            try:
+                item = registryDict['inProgress'][handle]
+            except:
+                return
             item['api'].append(api)
             item['method'] = 'write'
-            regkey = row[10].split('->')[1]
-            regtype = row[11].split('->')[1]
-            regvalue = row[12].split('->')[1]
+            regkey, regtype, regvalue = self.getKeyAndValue(row[10:])
             if not 'key' in item:
                 item['key'] = [regkey]
             else:
@@ -215,7 +264,7 @@ class CreateNicerSummary(Processing):
             item['statusmessage'].append(failuremessage)
             registryDict['inProgress'][handle] = item
             item = None
-        elif (row[6].lower() == 'regqueryvalueexa' or row[6].lower() == 'regqueryvalueexw') and len(row) >= 11 and row[9].split('->')[1] in registryDict['inProgress']:
+        elif (row[6].lower() == 'regqueryvalueexa' or row[6].lower() == 'regqueryvalueexw') and len(row) >= 11:
             """
             check for registry query value
             """
@@ -226,14 +275,16 @@ class CreateNicerSummary(Processing):
                 failuremessage = self.REG_STATUS_MAPPING[failurecode]
             except:
                 failuremessage = failurecode
-            handle = row[9].split('->')[1]
-            item = registryDict['inProgress'][handle]
+            regpath, registry, access, handle = self.getRegValues(row[9:])
+            try:
+                item = registryDict['inProgress'][handle]
+            except:
+                return
             item['api'].append(api)
             item['method'] = 'read'
             item['status'].append(status)
             item['statusmessage'].append(failuremessage)
-            regkey = row[10].split('->')[1]
-            regdata = row[11].split('->')[1]
+            regkey, regdata, regbuffer = self.getKeyAndValue(row[10:])
             if not 'key' in item:
                 item['key'] = [regkey]
             else:
@@ -251,25 +302,24 @@ class CreateNicerSummary(Processing):
             api = row[6]
             status = row[7]
             failurecode = row[8].strip()
-            regpath = row[10].split('->')[1]
+            regpath, registry, access, handle = self.getRegValues(row[9:])
             try:
                 failuremessage = self.REG_STATUS_MAPPING[failurecode]
             except:
                 failuremessage = failurecode
             try:
-                hive = self.REGISTRY_MAPPING[row[9].split('->')[1].lower()]
+                hive = self.REGISTRY_MAPPING[registry]
             except StandardError as e:
-                hive = row[9].split('->')[1].lower()
+                hive = registry
                 if hive in registryDict['inProgress']:
                     oitem = registryDict['inProgress'][hive]
                     hive = oitem['hive']
                     regpath = "%s\\%s" % (oitem['path'], regpath)
-            handle = row[11].split('->')[1]
             item = {"api": [api], "method": "read", "hive": hive, "status": [status], "statusmessage": [failuremessage], "path": regpath, "handle": handle, "access": "", "key": [''], "type": [''], "value": [''], "data": ['']}
             if int(failurecode) == 0:
                 registryDict['inProgress'][handle] = item
                 item = None
-        elif (row[6].lower() == 'regenumkeyexa' or row[6].lower() == 'regenumkeyexw') and len(row) >= 13 and row[9].split('->')[1] in registryDict['inProgress']:
+        elif (row[6].lower() == 'regenumkeyexa' or row[6].lower() == 'regenumkeyexw') and len(row) >= 13:
             """
             check for key enumeration
             """
@@ -280,13 +330,16 @@ class CreateNicerSummary(Processing):
                 failuremessage = self.REG_STATUS_MAPPING[failurecode]
             except:
                 failuremessage = failurecode
-            handle = row[9].split('->')[1]
-            item = registryDict['inProgress'][handle]
+            regpath, registry, access, handle = self.getRegValues(row[9:])
+            try:
+                item = registryDict['inProgress'][handle]
+            except:
+                return
             item['api'].append(api)
             item['method'] = 'enumerate'
             item['status'].append(status)
             item['statusmessage'].append(failuremessage)
-            regdata = row[11].split('->')[1]
+            regkey, regdata, regbuffer = self.getKeyAndValue(row[10:])
             if not 'data' in item:
                 item['data'] = [regdata]
             else:
@@ -312,6 +365,16 @@ class CreateNicerSummary(Processing):
             elif item.lower().startswith("filename->"):
                 filename = item.split('->')[1]
         return accessmode, filename
+
+    def getSourceDestination(self, parts):
+        src = None
+        dst = None
+        for item in parts:
+            if item.lower().startswith("existingfilename->"):
+                src = item.split('->')[1]
+            elif item.lower().startswith("newfilename->"):
+                dst = item.split('->')[1]
+        return src, dst
 
     def handleFilesystem(self, row, filesysDict):
         filename = None
@@ -352,15 +415,15 @@ class CreateNicerSummary(Processing):
                 failurereason = self.ERROR_MAPPING[failurecode.lower()]
             except:
                 failurereason = "Unknown"
-            srcFile = row[9].split('->')[1]
+            srcFile, dstFile = self.getSourceDestination(row[9:])
             if srcFile.startswith('\\??\\'):
                 srcFile = srcFile[4:]
-            dstFile = row[10].split('->')[1]
             if dstFile.startswith('\\??\\'):
                 dstFile = dstFile[4:]
             accessmode = api
             modes = ["FILE_COPY"]
         else:
+            #print row
             return
 
         if filename:
@@ -494,6 +557,4 @@ class CreateNicerSummary(Processing):
                         #print found, f
                         pass
 
-        #print json.dumps(resultDict, sort_keys=True, indent=4, separators=(',', ': '))
-        #print json.dumps(resultDict['registry'], sort_keys=True, indent=4, separators=(',', ': '))
         return resultDict

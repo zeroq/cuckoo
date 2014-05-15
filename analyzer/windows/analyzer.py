@@ -443,6 +443,7 @@ class Analyzer:
         # We update the target according to its category. If it's a file, then
         # we store the path.
         if self.config.category == "file":
+            log.info("Run as: %s" % (self.target))
             self.target = os.path.join(os.environ["TEMP"] + os.sep,
                                        str(self.config.file_name))
         # If it's a URL, well.. we store the URL.
@@ -641,12 +642,13 @@ class Analyzer:
         time_counter = 0
 
         ### JG: flag that last minutes are running from reduced timer
-        wait_mode = False
+        wait_mode = True
+        wait_active = True
 
         while True:
             time_counter += 1
             ### JG: added interaction check
-            if time_counter == int(self.config.timeout) and self.config.interaction == 0:
+            if time_counter >= int(self.config.timeout) and self.config.interaction == 0:
                 log.info("Analysis timeout hit, terminating analysis")
                 break
 
@@ -682,17 +684,16 @@ class Analyzer:
                     # If none of the monitored processes are still alive, we
                     # can terminate the analysis.
                     if len(PROCESS_LIST) == 0:
-                        log.info("Process list is empty, "
-                                 "terminating analysis...")
-                        break
                         ### JG: set timer to one minute (run analysis a little longer in case some process was injected that is not monitored)
-                        #wait_mode = True
-                        #if int(self.config.timeout)>60:
-                        #    time_counter = int(self.config.timeout)-60
-                        #    log.info("wait another 60 seconds if something happens ...")
-                        #else:
-                        #    ### not enough analysis time configured
-                        #    break
+                        if wait_mode:
+                            if wait_active and int(self.config.timeout)>60:
+                                wait_active = False
+                                time_counter = int(self.config.timeout)-60
+                                log.info("wait another 60 seconds if something happens ...")
+                        else:
+                            log.info("Process list is empty, "
+                                     "terminating analysis...")
+                            break
 
                     # Update the list of monitored processes available to the
                     # analysis package. It could be used for internal

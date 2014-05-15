@@ -146,6 +146,9 @@ class GuestManager:
         # TODO: deal with unicode URLs.
         if options["category"] == "file":
             options["file_name"] = sanitize_filename(options["file_name"])
+            ### JG: switched to own filename string
+            if "filename" in options and len(options["filename"])>0:
+                options["file_name"] = sanitize_filename(options["filename"])
 
         try:
             # Wait for the agent to respond. This is done to check the
@@ -174,13 +177,8 @@ class GuestManager:
                 data = xmlrpclib.Binary(file_data)
 
                 try:
-                    ### JG: switched to own filename string
-                    if "filename" in options and len(options["filename"])>0:
-                        log.info("File uploaded as: %s" % (sanitize_filename(options["filename"])))
-                        self.server.add_malware(data, sanitize_filename(options["filename"]))
-                    else:
-                        log.info("File uploaded as: %s" % (options["file_name"]))
-                        self.server.add_malware(data, options["file_name"])
+                    log.info("File uploaded as: %s" % (options["file_name"]))
+                    self.server.add_malware(data, options["file_name"])
                 except Exception as e:
                     raise CuckooGuestError("{0}: unable to upload malware to "
                                            "analysis machine: {1}".format(self.id, e))

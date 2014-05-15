@@ -12,9 +12,11 @@ class Strings(Processing):
         """Run printable character gathering.
         @return: information dict.
         """
+	self.key = "strings"
         strings = {}
 
         if not os.path.exists(self.file_path):
+            log.warning("Analysis results folder does not contain any file.")
             return {}
 
         if not self.task["category"] == "file":

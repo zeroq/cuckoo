@@ -363,7 +363,7 @@ class CreateNicerSummary(Processing):
             if item.lower().startswith("desiredaccess->"):
                 accessmode = item.split('->')[1]
             elif item.lower().startswith("filename->"):
-                filename = item.split('->')[1]
+                filename = item.split('->')[1].replace('\\\\', '\\')
         return accessmode, filename
 
     def getSourceDestination(self, parts):
@@ -371,9 +371,9 @@ class CreateNicerSummary(Processing):
         dst = None
         for item in parts:
             if item.lower().startswith("existingfilename->"):
-                src = item.split('->')[1]
+                src = item.split('->')[1].replace('\\\\', '\\')
             elif item.lower().startswith("newfilename->"):
-                dst = item.split('->')[1]
+                dst = item.split('->')[1].replace('\\\\', '\\')
         return src, dst
 
     def handleFilesystem(self, row, filesysDict):

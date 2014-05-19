@@ -66,9 +66,10 @@ class resubmitDownloads(Report):
                 log.warning("Unable to load JSON dump: %s" % (e))
                 return None
 
-            for httpRequest in obj['network']['http']:
-                if httpRequest['method'].lower() == 'get' and httpRequest['uri'].lower().endswith('.exe'):
-                    filesToLoad.append([httpRequest['uri'], httpRequest['user-agent']])
+            if 'network' in obj and 'http' in obj['network']:
+                for httpRequest in obj['network']['http']:
+                    if httpRequest['method'].lower() == 'get' and httpRequest['uri'].lower().endswith('.exe'):
+                        filesToLoad.append([httpRequest['uri'], httpRequest['user-agent']])
         else:
             log.warning("JSON report missing at %s" % (jsonReport))
             return None

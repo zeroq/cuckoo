@@ -1,4 +1,5 @@
 #!/usr/bin/env python2.7
+# vim: tabstop=4 shiftwidth=4 expandtab
 
 from lib.cuckoo.common.abstracts import Report
 from lib.cuckoo.common.exceptions import CuckooReportError
@@ -248,6 +249,7 @@ class STIXReport(Report):
     def __create_cybox_host_object(self, domain, port, whitelist):
         if not domain:
             return None
+        domain = domain.rsplit(':', 1)[0]
         if not port:
             port = 80
         hobj = HostField()
@@ -333,7 +335,11 @@ class STIXReport(Report):
         if not entry:
             return None
         http_request_response = HTTPRequestResponse()
-        http_request_response.http_client_request = self.__create_cybox_http_client_request(entry['data'], entry['port'], entry['body'], entry['method'], entry['path'], entry['version'], whitelist)
+        if entry['host'].count(':')>0:
+            host, port = entry['host'].rsplit(':', 1)
+        else:
+            port = 80
+        http_request_response.http_client_request = self.__create_cybox_http_client_request(entry['data'], port, entry['body'], entry['method'], entry['path'], entry['version'], whitelist)
         if not http_request_response.http_client_request:
             log.debug("no client response object created ...")
             return None
@@ -517,6 +523,7 @@ class STIXReport(Report):
         else:
             sandbox_report_date = datetime.datetime.now(pytz.timezone('Europe/Berlin')).isoformat()
         stix_header.description = 'Summarized analysis results for file "%s" with MD5 hash "%s" created on %s.' % (str(main_file_object.file_name).decode('utf8', errors='xmlcharrefreplace'), main_file_object.hashes.md5, sandbox_report_date)
+        stix_header.add_package_intent("Malware Characterization")
         """ create markings """
         spec = MarkingSpecification()
         spec.idref = stix_id
@@ -536,7 +543,7 @@ class STIXReport(Report):
         stix_header.handling = Marking([spec])
         stix_information_source = InformationSource()
         stix_information_source.time = Time(produced_time=sandbox_report_date)
-        stix_information_source.tools = ToolInformationList([ToolInformation(tool_name="SIEMENS-ANALYSIS-TOOL-ID-12", tool_vendor="")]+vtInformationTools)
+        stix_information_source.tools = ToolInformationList([ToolInformation(tool_name="SIEMENS-ANALYSIS-TOOL-ID-12", tool_vendor="ANALYSIS-ID: %s" % (jdict['info']['id']))]+vtInformationTools)
         stix_header.information_source = stix_information_source
         stix_package.stix_header = stix_header
         """ write result xml file """

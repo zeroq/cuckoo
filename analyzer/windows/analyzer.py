@@ -609,6 +609,7 @@ class Analyzer:
                             ### JG: in interactive mode check if an initial pid terminated
                             if self.config.interaction != 0 and pid in initialPIDs:
                                 log.info("Interactive Mode: initial PID terminated -> terminating analysis ...")
+                                wait_mode = False
                                 break
 
                     # If none of the monitored processes are still alive, we

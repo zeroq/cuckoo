@@ -61,6 +61,13 @@ class JsonDump(Report):
                             obj = None
                     report.close()
                 if obj:
+                    try:
+                        new_report_file = codecs.open(os.path.join(self.reports_path, "report.json"), "w", "utf-8")
+                        json.dump(results, new_report_file, sort_keys=False, indent=4, ensure_ascii=False)
+                        new_report_file.close()
+                    except StandardError as e:
+                        log.warning("failed storing updated json: %s" % (e))
+                        pass
                     dest = os.path.join(self.reports_path, "jsonparts")
                     if not os.path.exists(dest):
                         os.makedirs(dest)

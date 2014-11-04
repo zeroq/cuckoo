@@ -209,7 +209,7 @@ class File:
 
         return file_type
 
-    def get_yara(self, rulepath=os.path.join(CUCKOO_ROOT, "data", "yara", "index_binary.yar")):
+    def get_yara(self, rulepath=os.path.join(CUCKOO_ROOT, "data", "yara", "index_binaries.yar")):
         """Get Yara signatures matches.
         @return: matched Yara signatures.
         """
@@ -217,6 +217,11 @@ class File:
 
         if HAVE_YARA:
             if os.path.getsize(self.file_path) > 0:
+                if not os.path.exists(rulepath):
+                    log.warning("The specified rule file at %s doesn't exist, skip",
+                                rulepath)
+                    return
+
                 try:
                     rules = yara.compile(rulepath, error_on_warning=True)
 

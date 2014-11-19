@@ -409,6 +409,7 @@ class Enhanced(object):
         """
         self.currentdir = "C: "
         self.eid = 0
+        self.status = "false"
         self.details = details
         self.filehandles = {}
         self.servicehandles = {}
@@ -500,13 +501,15 @@ class Enhanced(object):
             if call["api"] in item["apis"]:
                 args = _load_args(call)
                 self.eid += 1
+                self.status = call["status"]
 
                 event = {
                     "event": item["event"],
                     "object": item["object"],
                     "timestamp": call["timestamp"],
                     "eid": self.eid,
-                    "data": {}
+                    "data": {},
+                    "status": self.status
                 }
 
                 for logname, dataname in item["args"]:
@@ -774,7 +777,8 @@ class Enhanced(object):
                 event["data"]["regkey"] = "{0}{1}".format(self._get_keyhandle(args.get("Handle", "")), args.get("ValueName", ""))
 
             elif call["api"] in ["RegQueryValueExA", "RegQueryValueExW", "RegDeleteValueA", "RegDeleteValueW"]:
-                event["data"]["regkey"] = "{0}{1}".format(self._get_keyhandle(args.get("Handle", "UNKNOWN")), args.get("ValueName", ""))
+                event["data"]["regkey"] = "{0}".format(self._get_keyhandle(args.get("Handle", "UNKNOWN")))
+                event["data"]["regvalue"] = "{0}".format(args.get("ValueName", ""))
 
             elif call["api"] in ["NtQueryValueKey", "NtDeleteValueKey"]:
                 event["data"]["regkey"] = "{0}{1}".format(self._get_keyhandle(args.get("KeyHandle", "UNKNOWN")), args.get("ValueName", ""))

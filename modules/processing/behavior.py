@@ -781,7 +781,8 @@ class Enhanced(object):
                 event["data"]["regkey"] = "{0}{1}".format(self._get_keyhandle(args.get("Handle", "")), args.get("SubKey", ""))
 
             elif call["api"] in ["RegSetValueExA", "RegSetValueExW"]:
-                event["data"]["regkey"] = "{0}{1}".format(self._get_keyhandle(args.get("Handle", "")), args.get("ValueName", ""))
+                event["data"]["regkey"] = "{0}".format(self._get_keyhandle(args.get("Handle", "")))
+                event["data"]["regvalue"] = "{0}".format(args.get("ValueName", ""))
 
             elif call["api"] in ["RegQueryValueExA", "RegQueryValueExW", "RegDeleteValueA", "RegDeleteValueW"]:
                 event["data"]["regkey"] = "{0}".format(self._get_keyhandle(args.get("Handle", "UNKNOWN")))

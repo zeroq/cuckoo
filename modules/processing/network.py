@@ -193,9 +193,9 @@ class Pcap:
             entry["type"] = data.type
 
             # Extract data from dpkg.icmp.ICMP.
-            try: 
+            try:
                 entry["data"] = convert_to_printable(data.data.data)
-            except: 
+            except:
                 entry["data"] = ""
 
             self.icmp_requests.append(entry)
@@ -552,14 +552,5 @@ class NetworkAnalysis(Processing):
         # Save PCAP file hash.
         if os.path.exists(self.pcap_path):
             results["pcap_sha256"] = File(self.pcap_path).get_sha256()
-
-
-        ### JG: copy pcap to passive dns share
-        log = logging.getLogger("Processing.Network")
-        if os.path.exists(self.pcap_path):
-            try:
-                shutil.copy(self.pcap_path, "/mnt/pdnscert/%s-dump.pcap" % (self.task["id"]))
-            except StandardError as e:
-                log.warning("failed to copy pcap to share: %s" % (e))
 
         return results

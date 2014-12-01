@@ -49,7 +49,8 @@ class CreateNicerSummary(Processing):
             "0x80000002": "HKEY_LOCAL_MACHINE",
             "0x80000003": "HKEY_USERS",
             "0x80000004": "HKEY_PERFORMANCE_DATA",
-            "0x80000005": "HKEY_CURRENT_CONFIG"
+            "0x80000005": "HKEY_CURRENT_CONFIG",
+            "0x80000006": "HKEY_DYN_DATA"
         }
 
         self.REG_TYPE_MAPPING = {

@@ -451,16 +451,17 @@ class Enhanced(object):
         @handle: handle to base key
         @subkey: subkey to add
         """
-        if handle != 0 and handle in self.keyhandles:
-            return self.keyhandles[handle]
+
+        #if handle != 0 and handle in self.keyhandles:
+        #    return self.keyhandles[handle]
 
         name = ""
         if registry and registry != "0x00000000" and \
                 registry in self.keyhandles:
             name = self.keyhandles[registry]
 
-        print "Name", name
-        print "subkey", subkey
+        #print "Name", name
+        #print "subkey", subkey
 
         nkey = name + subkey
         nkey = fix_key(nkey)
@@ -478,7 +479,10 @@ class Enhanced(object):
         return key
 
     def _get_keyhandle(self, handle):
-        return self.keyhandles.get(handle, "")
+        result =  self.keyhandles.get(handle, None)
+        if not result:
+            return self.keyhandles.get('0x00000000', None)
+        return result
 
     def _process_call(self, call):
         """ Gets files calls

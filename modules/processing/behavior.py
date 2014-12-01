@@ -459,6 +459,9 @@ class Enhanced(object):
                 registry in self.keyhandles:
             name = self.keyhandles[registry]
 
+        print "Name", name
+        print "subkey", subkey
+
         nkey = name + subkey
         nkey = fix_key(nkey)
 
@@ -781,7 +784,8 @@ class Enhanced(object):
                 event["data"]["regvalue"] = "{0}".format(args.get("ValueName", ""))
 
             elif call["api"] in ["NtQueryValueKey", "NtDeleteValueKey"]:
-                event["data"]["regkey"] = "{0}{1}".format(self._get_keyhandle(args.get("KeyHandle", "UNKNOWN")), args.get("ValueName", ""))
+                event["data"]["regkey"] = "{0}".format(self._get_keyhandle(args.get("KeyHandle", "UNKNOWN")))
+                event["data"]["regvalue"] = "{0}".format(args.get("ValueName", ""))
 
             elif call["api"] in ["LoadLibraryA", "LoadLibraryW", "LoadLibraryExA", "LoadLibraryExW", "LdrGetDllHandle"] and call["status"]:
                 self._add_loaded_module(args.get("FileName", ""), args.get("ModuleHandle", ""))
@@ -825,7 +829,7 @@ class Enhanced(object):
         elif call["api"] in ["RegOpenKeyExA", "RegOpenKeyExW", "RegCreateKeyExA", "RegCreateKeyExW"]:
             self._add_keyhandle(args.get("Registry", ""), args.get("SubKey", ""), args.get("Handle", ""))
 
-        elif call["api"] in ["NtOpenKey"]:
+        elif call["api"] in ["NtOpenKey", "NtOpenKeyEx"]:
             self._add_keyhandle(None, args.get("ObjectAttributes", ""), args.get("KeyHandle", ""))
 
         elif call["api"] in ["RegCloseKey"]:

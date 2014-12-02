@@ -738,6 +738,15 @@ class Enhanced(object):
                 "args": []
             },
             {
+                "event": "enumerate",
+                "object": "registry",
+                "apis": [
+                    "NtEnumerateValueKey",
+                    "NtEnumerateKey"
+                ],
+                "args":  []
+            },
+            {
                 "event": "create",
                 "object": "windowshook",
                 "apis": ["SetWindowsHookExA"],
@@ -788,7 +797,7 @@ class Enhanced(object):
                 event["data"]["regkey"] = "{0}".format(self._get_keyhandle(args.get("Handle", "UNKNOWN")))
                 event["data"]["regvalue"] = "{0}".format(args.get("ValueName", ""))
 
-            elif call["api"] in ["NtQueryValueKey", "NtDeleteValueKey"]:
+            elif call["api"] in ["NtQueryValueKey", "NtDeleteValueKey", "NtEnumerateValueKey", "NtEnumerateKey"]:
                 event["data"]["regkey"] = "{0}".format(self._get_keyhandle(args.get("KeyHandle", "UNKNOWN")))
                 event["data"]["regvalue"] = "{0}".format(args.get("ValueName", ""))
 

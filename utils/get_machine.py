@@ -22,9 +22,13 @@ def main(analysis_id):
     db = Database()
     analysis_task = db.view_task(analysis_id)
     if analysis_task:
-        print analysis_task.machine
+        mname = analysis_task.machine
+        if mname:
+            print mname
+        else:
+            print "NotSet"
         return
-    print "NotSet"
+    print "NotFound"
     return
 
 if __name__ == "__main__":

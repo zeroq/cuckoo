@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 class FakeDNS(Auxiliary):
     def start(self):
         fakedns = self.options.get("fakedns", None)
-        listen_ip = self.options.get("", "192.168.57.1")
+        listen_ip = self.options.get("", "192.168.56.1")
 
         withInternet = self.task.internet
 

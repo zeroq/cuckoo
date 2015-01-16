@@ -9,6 +9,7 @@ storage/*
 
 # Ignore Cuckoo conf
 conf/*
+*.conf
 
 # Ignore Python byte code
 *.pyc

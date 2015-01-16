@@ -40,6 +40,7 @@ def create_folder(root=".", folder=None):
     if folder and not os.path.isdir(folder_path):
         try:
             os.makedirs(folder_path)
+            os.chmod(folder_path, 0777)
         except OSError:
             raise CuckooOperationalError("Unable to create folder: %s" %
                                          folder_path)

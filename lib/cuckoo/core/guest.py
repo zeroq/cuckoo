@@ -214,7 +214,7 @@ class GuestManager:
             # If the analysis hits the critical timeout, just return straight
             # straight away and try to recover the analysis results from the
             # guest.
-            if time.time() > end and self.interaction < 2:
+            if time.time() > end and self.interaction < 1:
                 ### JG: modified
                 log.error("%s: the analysis hit the critical timeout, aborted" % self.id)
                 break

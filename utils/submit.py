@@ -45,6 +45,9 @@ def main():
     parser.add_argument("--shuffle", action="store_true", default=False, help="Shuffle samples before submitting them", required=False)
     parser.add_argument("--unique", action="store_true", default=False, help="Only submit new samples, ignore duplicates", required=False)
     parser.add_argument("--quiet", action="store_true", default=False, help="Only print text on failure", required=False)
+    ### JG: added interaction and internet mode options
+    parser.add_argument("--interaction", type=int, action="store", default=0, help="Specify interaction level (0=automated, 1=interactive file, 2=command shell, 3=URL analysis)", required=False)
+    parser.add_argument("--internet", type=int, action="store", default=0, help="Specify internet (emulated or NAT)", required=False)
 
     try:
         args = parser.parse_args()
@@ -211,6 +214,9 @@ def main():
                                       custom=args.custom,
                                       memory=args.memory,
                                       enforce_timeout=args.enforce_timeout,
+                                      internet=args.internet,
+                                      interaction=args.interaction,
+                                      filename=os.path.split(file_path)[-1],
                                       clock=args.clock,
                                       tags=args.tags)
 

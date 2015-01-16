@@ -175,11 +175,6 @@ class Agent:
         if not self.analyzer_path or not os.path.exists(self.analyzer_path):
             return False
 
-        ### JG: insert wait for interactive file analysis (wait for user to connect via VNC)
-        if self.interaction == 1:
-            raw_input("Interactive analysis process. Press enter to continue ...")
-            print("Continuing analysis process.")
-
         try:
             proc = subprocess.Popen([sys.executable, self.analyzer_path],
                                     cwd=os.path.dirname(self.analyzer_path))

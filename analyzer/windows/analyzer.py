@@ -535,13 +535,21 @@ class Analyzer:
         # Initialize the analysis package.
         pack = package_class(self.config.get_options())
 
+        ### JG: maintain intial pid list in interactive mode and close monitoring if it is gone
+        initialPIDs = []
+
         ### JG: disable timer if interactive command shell
         if self.config.interaction != 0:
-            log.info("Disabling IE spawn due to interactive command shell mode")
-            enableIEspawn = False
-        else:
-            enableIEspawn = False
-            start_time = time.time()
+            log.info("IE spawn due to interactive mode (needs to be closed to terminate analysis)")
+            p = Process()
+            #p.execute(path=os.path.join(os.getenv("ProgramFiles"), "Internet Explorer", "iexplore.exe"), args="\"http://www.google.de\"", suspended=False)
+            p.execute(path=os.path.join(os.environ['WINDIR'], "system32", "cmd.exe"), args="CloseMe", suspended=False)
+            #p.execute(path="C:\\WINDOWS\\system32\\cmd.exe", args=arg, suspended=True)
+            initialPIDs.append(int(p.pid))
+            log.info("Added new process to list with pid: %s", p.pid)
+            skip_loops = 5
+            #PROCESS_LIST.append(int(p.pid))
+            #start_time = time.time()
 
         # Initialize Auxiliary modules
         Auxiliary()
@@ -595,13 +603,6 @@ class Analyzer:
                               "an unhandled exception: "
                               "{1}".format(package_name, e))
 
-        ### JG: maintain intial pid(s) list in interactive modes and close monitoring if all of them are gone
-        initialPIDs = []
-        if pids:
-            if type(pids) == list:
-                initialPIDs = initialPIDs + pids
-            else:
-                initialPIDs.append(pids)
 
         # If the analysis package returned a list of process IDs, we add them
         # to the list of monitored processes and enable the process monitor.
@@ -628,6 +629,7 @@ class Analyzer:
         ### JG: flag that last minutes are running from reduced timer
         wait_mode = True
         wait_active = True
+        break_interactive = False
 
         while True:
             time_counter += 1
@@ -644,14 +646,17 @@ class Analyzer:
                 continue
 
             try:
-                ### JG: check if IE should be spawned
-                if enableIEspawn:
-                    elapsed_time = time.time() - start_time
-                    if elapsed_time >= 30.0:
-                        log.info("automatically spawning IE")
-                        p = Process()
-                        p.execute(path=os.path.join(os.getenv("ProgramFiles"), "Internet Explorer", "iexplore.exe"), args="\"http://www.google.de\"", suspended=False)
-                        enableIEspawn = False
+                ### JG: in interactive mode check if initial pid was closed to terminate analysis
+                if self.config.interaction != 0 and skip_loops<=0:
+                    for pid in initialPIDs:
+                        if not Process(pid=pid).is_alive():
+                            log.info("Interactive Mode: initial PID terminated (%s) -> terminating analysis ..." % (pid))
+                            break_interactive = True
+                            break
+                elif self.config.interaction != 0 and skip_loops>0:
+                    skip_loops -= 1
+
+
                 # If the process monitor is enabled we start checking whether
                 # the monitored processes are still alive.
                 if pid_check:
@@ -660,14 +665,10 @@ class Analyzer:
                             log.info("Process with pid %s has terminated", pid)
                             PROCESS_LIST.remove(pid)
                             log.info("%s" % (PROCESS_LIST))
-                            ### JG: in interactive mode check if an initial pid terminated
-                            if self.config.interaction != 0 and pid in initialPIDs:
-                                log.info("Interactive Mode: initial PID terminated -> terminating analysis ...")
-                                break
 
                     # If none of the monitored processes are still alive, we
                     # can terminate the analysis.
-                    if len(PROCESS_LIST) == 0:
+                    if len(PROCESS_LIST) == 0 and self.config.interaction == 0:
                         ### JG: set timer to one minute (run analysis a little longer in case some process was injected that is not monitored)
                         if wait_mode:
                             if wait_active and int(self.config.timeout)>60:
@@ -683,6 +684,10 @@ class Analyzer:
                     # analysis package. It could be used for internal
                     # operations within the module.
                     pack.set_pids(PROCESS_LIST)
+
+                ### JG: if break from interactive mode received
+                if break_interactive:
+                    break
 
                 try:
                     # The analysis packages are provided with a function that
@@ -715,8 +720,11 @@ class Analyzer:
             log.warning("The package \"%s\" finish function raised an "
                         "exception: %s", package_name, e)
 
+
+        log.info("Before Terminating Auxiliary modules ...")
         # Terminate the Auxiliary modules.
         for aux in aux_enabled:
+            log.info("%s" % (aux.__class__.__name__))
             try:
                 aux.stop()
             except (NotImplementedError, AttributeError):
@@ -724,6 +732,7 @@ class Analyzer:
             except Exception as e:
                 log.warning("Cannot terminate auxiliary module %s: %s",
                             aux.__class__.__name__, e)
+        log.info("After Terminating Auxiliary modules ...")
 
         if self.config.terminate_processes:
             # Try to terminate remaining active processes. We do this to make sure

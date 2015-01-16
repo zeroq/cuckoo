@@ -801,11 +801,29 @@ class Enhanced(object):
                 event["data"]["regkey"] = "{0}".format(self._get_keyhandle(args.get("KeyHandle", "UNKNOWN")))
                 event["data"]["regvalue"] = "{0}".format(args.get("ValueName", ""))
 
-            elif call["api"] in ["LoadLibraryA", "LoadLibraryW", "LoadLibraryExA", "LoadLibraryExW", "LdrGetDllHandle"] and call["status"]:
-                self._add_loaded_module(args.get("FileName", ""), args.get("ModuleHandle", ""))
+            #elif call["api"] in ["LoadLibraryA", "LoadLibraryW", "LoadLibraryExA", "LoadLibraryExW", "LdrGetDllHandle"] and call["status"]:
+            elif call["api"] in ["LoadLibraryA", "LoadLibraryW", "LoadLibraryExA", "LoadLibraryExW", "LdrGetDllHandle"]:
+                fullfilename = args.get("FileName", "")
+                if '\\' in fullfilename:
+                    fpath, fname = fullfilename.rsplit('\\', 1)
+                else:
+                    fpath = ""
+                    fname = fullfilename
+                event["data"]["pathtofile"] = "{0}".format(fpath)
+                event["data"]["file"] = "{0}".format(fname)
+                self._add_loaded_module(fname, args.get("ModuleHandle", ""))
 
-            elif call["api"] in ["LdrLoadDll"] and call["status"]:
-                self._add_loaded_module(args.get("FileName", ""), args.get("BaseAddress", ""))
+            #elif call["api"] in ["LdrLoadDll"] and call["status"]:
+            elif call["api"] in ["LdrLoadDll"]:
+                fullfilename = args.get("FileName", "")
+                if '\\' in fullfilename:
+                    fpath, fname = fullfilename.rsplit('\\', 1)
+                else:
+                    fpath = ""
+                    fname = fullfilename
+                event["data"]["pathtofile"] = "{0}".format(fpath)
+                event["data"]["file"] = "{0}".format(fname)
+                self._add_loaded_module(fname, args.get("BaseAddress", ""))
 
             elif call["api"] in ["LdrGetProcedureAddress"] and call["status"]:
                 self._add_procedure(args.get("ModuleHandle", ""), args.get("FunctionName", ""), args.get("FunctionAddress", ""))

@@ -19,14 +19,18 @@ def timestamp(dt):
     return time.mktime(dt.timetuple())
 
 def main(analysis_id):
-    db = Database()
-    analysis_task = db.view_task(analysis_id)
-    if analysis_task:
-        mname = analysis_task.machine
-        if mname:
-            print mname
-        else:
-            print "NotSet"
+    try:
+        db = Database()
+        analysis_task = db.view_task(analysis_id)
+        if analysis_task:
+            mname = analysis_task.machine
+            if mname:
+                print mname
+            else:
+                print "NotSet"
+            return
+    except Exception as e:
+        print "NotFound"
         return
     print "NotFound"
     return

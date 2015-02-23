@@ -471,6 +471,8 @@ class RunReporting:
         self.task = Database().view_task(task_id).to_dict()
         self.results = results
         self.analysis_path = os.path.join(CUCKOO_ROOT, "storage", "analyses", str(task_id))
+        os.chmod(self.analysis_path, 0777)
+        os.umask(0002)
         self.cfg = Config("reporting")
         ### JG: added interaction mode
         self.interaction = interaction

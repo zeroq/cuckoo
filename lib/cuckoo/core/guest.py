@@ -59,9 +59,7 @@ class GuestManager:
         while True:
             # Check if we've passed the timeout.
             if time.time() > end:
-                raise CuckooGuestError("{0}: the guest initialization hit the "
-                                       "critical timeout, analysis "
-                                       "aborted.".format(self.id))
+                raise CuckooGuestError("%s: the guest initialization hit the critical timeout, analysis aborted." % (self.id))
 
             try:
                 # If the server returns the given status, break the loop
@@ -241,7 +239,8 @@ class GuestManager:
                 if not error:
                     error = "unknown error"
 
-                raise CuckooGuestError("Analysis failed: {0}".format(error))
+                log.error("Analysis failed: %s" % (error))
+                break
             else:
                 log.debug("%s: analysis not completed yet (status=%s)",
                           self.id, status)

@@ -23,6 +23,7 @@ from lib.cuckoo.core.plugins import RunProcessing, RunSignatures, RunReporting
 from lib.cuckoo.core.startup import init_modules
 
 def process(aid, target=None, copy_path=None, report=False, auto=False):
+    os.umask(0002)
     results = RunProcessing(task_id=aid).run()
     RunSignatures(results=results).run()
 

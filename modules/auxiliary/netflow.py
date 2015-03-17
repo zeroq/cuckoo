@@ -83,6 +83,7 @@ class Netflow(Auxiliary):
                         os.kill(self.generator.pid, signal.SIGTERM)
                     except Exception as e:
                         log.error("generator kill by PID failed: %s" % (e))
+                        os.system("sudo kill %d" % (self.proc.pid))
                         pass
                 except Exception as e:
                     log.exception("Unable to stop the fprobe netflow generator with pid %d: %s", self.generator.pid, e)

@@ -96,10 +96,11 @@ class Sniffer(Auxiliary):
             except:
                 try:
                     if not self.proc.poll():
-                        log.debug("Killing sniffer")
+                        log.info("Killing sniffer")
                         self.proc.kill()
                 except OSError as e:
-                    log.debug("Error killing sniffer: %s. Continue", e)
+                    log.info("Error killing sniffer: %s. Continue", e)
+                    os.system("sudo kill %d" % (self.proc.pid))
                     pass
                 except Exception as e:
                     log.exception("Unable to stop the sniffer with pid %d: %s",

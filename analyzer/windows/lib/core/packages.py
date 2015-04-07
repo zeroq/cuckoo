@@ -10,7 +10,7 @@ def choose_package(file_type, file_name):
     if not file_type:
         return None
 
-    file_name = file_name.lower()
+    file_name = str(file_name).lower()
 
     if "DLL" in file_type:
         if file_name.endswith(".cpl"):

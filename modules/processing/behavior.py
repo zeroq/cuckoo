@@ -794,6 +794,9 @@ class Enhanced(object):
             if call["api"] in ["NtReadFile", "ReadFile", "NtWriteFile"]:
                 event["data"]["file"] = _get_handle(self.filehandles, args["FileHandle"])
 
+            elif call["api"] in ["NtCreateFile"]:
+                _add_handle(self.filehandles, args["FileHandle"], args["FileName"])
+
             elif call["api"] in ["RegDeleteKeyA", "RegDeleteKeyW"]:
                 event["data"]["regkey"] = "{0}{1}".format(self._get_keyhandle(args.get("Handle", "")), args.get("SubKey", ""))
 

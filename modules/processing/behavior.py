@@ -634,6 +634,14 @@ class Enhanced(object):
                 "args": [("file", "FileName")]
             },
             {
+                "event": "open",
+                "object": "file",
+                "apis": [
+                    "NtCreateFile"
+                ],
+                "args": [("file", "FileName")]
+            },
+            {
                 "event": "execute",
                 "object": "file",
                 "apis": [

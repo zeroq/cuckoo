@@ -66,9 +66,10 @@ class resubmitDownloads(Report):
                 log.warning("Unable to load JSON dump: %s" % (e))
                 return None
 
-            for httpRequest in obj['network']['http']:
-                if httpRequest['method'].lower() == 'get' and httpRequest['uri'].lower().endswith('.exe'):
-                    filesToLoad.append([httpRequest['uri'], httpRequest['user-agent']])
+            if 'network' in obj and 'http' in obj['network']:
+                for httpRequest in obj['network']['http']:
+                    if httpRequest['method'].lower() == 'get' and httpRequest['uri'].lower().endswith('.exe'):
+                        filesToLoad.append([httpRequest['uri'], httpRequest['user-agent']])
         else:
             log.warning("JSON report missing at %s" % (jsonReport))
             return None
@@ -77,16 +78,17 @@ class resubmitDownloads(Report):
         import urllib2
         import hashlib
         import zlib
-        proxy = urllib2.ProxyHandler({'http': 'proxy.siemens.de:81'})
+        if self.options.get("proxy"):
+                proxy = urllib2.ProxyHandler({'%s' % (self.options.get("pprotocol")): '%s:%s' % (self.options.get("pserver"), self.options.get("pport"))})
+                opener = urllib2.build_opener(proxy)
+                opener.addheaders = [('User-agent', uriList[1])]
+                urllib2.install_opener(opener)
         for uriList in filesToLoad:
             try:
                 if uriList[0].count('192.168.56.')>0:
                     log.info("skip local download: %s" % (uriList[0]))
                 else:
                     log.info("try to download: %s" % (uriList[0]))
-                opener = urllib2.build_opener(proxy)
-                opener.addheaders = [('User-agent', uriList[1])]
-                urllib2.install_opener(opener)
                 r = urllib2.urlopen(uriList[0])
                 filePath = os.path.abspath(os.path.join(downloadDir, os.path.basename(uriList[0])))
                 with open(filePath, "wb") as local_file:

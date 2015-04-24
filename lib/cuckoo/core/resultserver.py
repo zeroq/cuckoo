@@ -232,6 +232,8 @@ class Resulthandler(SocketServer.BaseRequestHandler):
 
 
 class FileUpload(object):
+    RESTRICTED_DIRECTORIES = "reports/",
+
     def __init__(self, handler):
         self.handler = handler
         self.upload_max_size = self.handler.server.cfg.resultserver.upload_max_size
@@ -244,18 +246,26 @@ class FileUpload(object):
         buf = self.handler.read_newline().strip().replace("\\", "/")
         log.debug("File upload request for {0}".format(buf))
 
-        if "../" in buf:
-            raise CuckooOperationalError("FileUpload failure, banned path.")
-
         dir_part, filename = os.path.split(buf)
 
+        if "./" in buf or not dir_part or buf.startswith("/"):
+            raise CuckooOperationalError("FileUpload failure, banned path.")
+
+        for restricted in self.RESTRICTED_DIRECTORIES:
+            if restricted in dir_part:
+                raise CuckooOperationalError("FileUpload failure, banned path.")
+
         if dir_part:
-            try: create_folder(self.storagepath, dir_part)
+            try:
+                create_folder(self.storagepath, dir_part)
             except CuckooOperationalError:
                 log.error("Unable to create folder %s" % folder)
                 return False
 
         file_path = os.path.join(self.storagepath, buf.strip())
+
+        if not file_path.startswith(self.storagepath):
+            raise CuckooOperationalError("FileUpload failure, path sanitization failed.")
 
         fd = open(file_path, "wb")
         chunk = self.handler.read_any()

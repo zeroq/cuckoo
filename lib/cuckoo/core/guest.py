@@ -200,8 +200,12 @@ class GuestManager:
         """
         log.debug("%s: waiting for completion", self.id)
 
-        end = time.time() + self.timeout
-        self.server._set_timeout(self.timeout)
+        if self.interaction < 1:
+            end = time.time() + self.timeout
+            self.server._set_timeout(self.timeout)
+        else:
+            end = time.time() + self.timeout
+            self.server._set_timeout(None)
 
 
         ### JG: added Error Counter

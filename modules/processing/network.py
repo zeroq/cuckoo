@@ -8,6 +8,8 @@ import sys
 import socket
 import logging
 from urlparse import urlunparse
+# JG:
+import shutil
 
 from lib.cuckoo.common.utils import convert_to_printable
 from lib.cuckoo.common.abstracts import Processing
@@ -174,7 +176,7 @@ class Pcap:
 
         # DNS query parsing.
         query = {}
- 
+
         if dns.rcode == dpkt.dns.DNS_RCODE_NOERR or \
            dns.qr == dpkt.dns.DNS_R or \
            dns.opcode == dpkt.dns.DNS_QUERY or True:
@@ -188,7 +190,7 @@ class Pcap:
             query["request"] = q_name
             if q_type == dpkt.dns.DNS_A:
                 query["type"] = "A"
-            if q_type == dpkt.dns.DNS_AAAA:    
+            if q_type == dpkt.dns.DNS_AAAA:
                 query["type"] = "AAAA"
             elif q_type == dpkt.dns.DNS_CNAME:
                 query["type"] = "CNAME"
@@ -201,7 +203,7 @@ class Pcap:
             elif q_type == dpkt.dns.DNS_SOA:
                 query["type"] = "SOA"
             elif q_type == dpkt.dns.DNS_HINFO:
-                query["type"] = "HINFO"     
+                query["type"] = "HINFO"
             elif q_type == dpkt.dns.DNS_TXT:
                 query["type"] = "TXT"
             elif q_type == dpkt.dns.DNS_SRV:
@@ -228,7 +230,7 @@ class Pcap:
                     ans["data"] = answer.ptrname
                 elif answer.type == dpkt.dns.DNS_NS:
                     ans["type"] = "NS"
-                    ans["data"] = answer.nsname   
+                    ans["data"] = answer.nsname
                 elif answer.type == dpkt.dns.DNS_SOA:
                     ans["type"] = "SOA"
                     ans["data"] = ",".join(answer.mname,
@@ -237,10 +239,10 @@ class Pcap:
                                            str(answer.refresh),
                                            str(answer.retry),
                                            str(answer.expire),
-                                           str(answer.minimum)) 
+                                           str(answer.minimum))
                 elif answer.type == dpkt.dns.DNS_HINFO:
                     ans["type"] = "HINFO"
-                    ans["data"] = " ".join(answer.text)             
+                    ans["data"] = " ".join(answer.text)
                 elif answer.type == dpkt.dns.DNS_TXT:
                     ans["type"] = "TXT"
                     ans["data"] = " ".join(answer.text)
@@ -433,5 +435,14 @@ class NetworkAnalysis(Processing):
         # Save PCAP file hash.
         if os.path.exists(self.pcap_path):
             results["pcap_sha256"] = File(self.pcap_path).get_sha256()
+
+
+        # copy pcap to passive dns share
+        #log = logging.getLogger("Processing.Network")
+        #if os.path.exists(self.pcap_path):
+        #    try:
+        #        shutil.copy(self.pcap_path, "/mnt/pdnscert/%s-dump.pcap" % (self.task["id"]))
+        #    except StandardError as e:
+        #        log.warning("failed to copy pcap to share: %s" % (e))
 
         return results

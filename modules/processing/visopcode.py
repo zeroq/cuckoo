@@ -31,6 +31,9 @@ class visopcode(Processing):
             return {}
         if not os.path.isfile(self.file_path):
             return {}
+        # more than 10MB then skip
+        if os.path.getsize(self.file_path)>10000000:
+            return {}
 
         try:
             pe = pefile.PE(self.file_path)

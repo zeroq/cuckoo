@@ -112,6 +112,13 @@ class Agent(object):
         config = ConfigParser.RawConfigParser()
         config.add_section("analysis")
 
+        ### JG: added interaction
+        if options["interaction"] < 1 or options["interaction"] > 4:
+            self.interaction = 0
+        else:
+            self.interaction = options["interaction"]
+        ###
+
         try:
             for key, value in options.items():
                 # Options can be UTF encoded.

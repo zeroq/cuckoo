@@ -75,13 +75,28 @@ class Zip(Package):
         except BadZipfile:
             raise CuckooPackageError("Invalid Zip file")
 
+    def get_executable(self, zip_path):
+        ### JG: added finding filename of executable in provided zip file
+        start_as = None
+        try:
+            with ZipFile(zip_path, "r") as archive:
+                for item in archive.filelist:
+                    fname = item.filename
+                    if fname.endswith('.exe') or fname.endswith('.bat') or fname.endswith('.com'):
+                        start_as = fname
+                        break
+        except StandardError as e:
+            start_as = None
+        return start_as
+
     def start(self, path):
         password = self.options.get("password")
 
         zipinfos = self.get_infos(path)
+        start_as = self.get_executable(path)
         self.extract_zip(path, self.curdir, password)
 
-        file_name = self.options.get("file")
+        file_name = self.options.get("file", start_as)
         # If no file name is provided via option, take the first file.
         if not file_name:
             # No name provided try to find a better name.

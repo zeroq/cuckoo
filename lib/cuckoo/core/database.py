@@ -277,6 +277,22 @@ class Task(Base):
                     server_default=TASK_PENDING,
                     nullable=False)
     sample_id = Column(Integer, ForeignKey("samples.id"), nullable=True)
+
+    ### JG: added interaction, internet, and filename
+    ###     interaction:
+    ###         0: automated analysis (default)
+    ###         1: interactive file analysis
+    ###         2: interactive command shell
+    ###         3: interactive url analysis
+    ###     internet:
+    ###         0: emulated internet (default)
+    ###         1: real internet via NAT
+    ###     filename:
+    ###         string: contains filename of uploaded file
+    interaction = Column(Integer(), server_default="0", nullable=False)
+    internet =  Column(Integer(), server_default="0", nullable=False)
+    filename = Column(Text(), nullable=True)
+
     sample = relationship("Sample", backref="tasks")
     guest = relationship("Guest", uselist=False, backref="tasks", cascade="save-update, delete")
     errors = relationship("Error", backref="tasks", cascade="save-update, delete")
@@ -550,6 +566,15 @@ class Database(object):
         session = self.Session()
         guest = Guest(name, label, manager)
         try:
+            ### JG: set machine name if it is not set
+            session.query(Task).get(task_id).machine = name
+            session.commit()
+            ### JG: delete already existing guest entry
+            if len(session.query(Guest).filter_by(task_id=task_id).all())>0:
+                test = session.query(Task).get(task_id).guest
+                if test.task_id == task_id and test.name == guest.name:
+                    session.delete(test)
+            ###
             session.query(Task).get(task_id).guest = guest
             session.commit()
             session.refresh(guest)
@@ -774,11 +799,13 @@ class Database(object):
             session.close()
 
     # The following functions are mostly used by external utils.
-
+    ### JG: added interaction, internet, and filename
     @classlock
     def add(self, obj, timeout=0, package="", options="", priority=1,
             custom="", owner="", machine="", platform="", tags=None,
-            memory=False, enforce_timeout=False, clock=None):
+            memory=False, enforce_timeout=False,
+            interaction=0, internet=0, filename="",
+            clock=None):
         """Add a task to database.
         @param obj: object to add (File or URL).
         @param timeout: selected timeout.
@@ -791,6 +818,9 @@ class Database(object):
         @param tags: optional tags that must be set for machine selection
         @param memory: toggle full memory dump.
         @param enforce_timeout: toggle full timeout execution.
+        @param interaction: toggle automated and interactive analysis mode
+        @param internet: toggle emulated or NATed internet
+        @param filename: filename
         @param clock: virtual machine clock time
         @return: cursor or None.
         """
@@ -845,6 +875,11 @@ class Database(object):
         task.memory = memory
         task.enforce_timeout = enforce_timeout
 
+        ### JG: added interaction, internet, and filename
+        task.interaction = interaction
+        task.internet = internet
+        task.filename = filename
+
         # Deal with tags format (i.e., foo,bar,baz)
         if tags:
             for tag in tags.split(","):
@@ -875,9 +910,12 @@ class Database(object):
 
         return task_id
 
+    ### JG: added interaction, internet, and filename
     def add_path(self, file_path, timeout=0, package="", options="",
                  priority=1, custom="", owner="", machine="", platform="",
-                 tags=None, memory=False, enforce_timeout=False, clock=None):
+                 tags=None, memory=False, enforce_timeout=False,
+                 interaction=0, internet=0, filename="",
+                 clock=None):
         """Add a task to database from file path.
         @param file_path: sample path.
         @param timeout: selected timeout.
@@ -890,6 +928,9 @@ class Database(object):
         @param tags: Tags required in machine selection
         @param memory: toggle full memory dump.
         @param enforce_timeout: toggle full timeout execution.
+        @param interaction: toggle automated and interactive analysis mode
+        @param internet: toggle emulated or NATed internet
+        @param filename: filename
         @param clock: virtual machine clock time
         @return: cursor or None.
         """
@@ -905,11 +946,14 @@ class Database(object):
 
         return self.add(File(file_path), timeout, package, options, priority,
                         custom, owner, machine, platform, tags, memory,
-                        enforce_timeout, clock)
+                        enforce_timeout, interaction, internet, filename, clock)
 
+    ### JG: added interaction, internet, and filename
     def add_url(self, url, timeout=0, package="", options="", priority=1,
                 custom="", owner="", machine="", platform="", tags=None,
-                memory=False, enforce_timeout=False, clock=None):
+                memory=False, enforce_timeout=False,
+                interaction=0, internet=0, filename="",
+                clock=None):
         """Add a task to database from url.
         @param url: url.
         @param timeout: selected timeout.
@@ -922,6 +966,9 @@ class Database(object):
         @param tags: tags for machine selection
         @param memory: toggle full memory dump.
         @param enforce_timeout: toggle full timeout execution.
+        @param interaction: toggle automated and interactive analysis mode
+        @param internet: toggle emulated or NATed internet
+        @param filename: filename
         @param clock: virtual machine clock time
         @return: cursor or None.
         """
@@ -934,7 +981,7 @@ class Database(object):
 
         return self.add(URL(url), timeout, package, options, priority,
                         custom, owner, machine, platform, tags, memory,
-                        enforce_timeout, clock)
+                        enforce_timeout, interaction, internet, filename, clock)
 
     @classlock
     def reschedule(self, task_id):
@@ -970,9 +1017,11 @@ class Database(object):
         else:
             tags = task.tags
 
+        ### JG: added interaction, internet, and filename
         return add(task.target, task.timeout, task.package, task.options,
                    task.priority, task.custom, task.owner, task.machine,
                    task.platform, tags, task.memory, task.enforce_timeout,
+                   task.interaction, task.internet, task.filename,
                    task.clock)
 
     def list_tasks(self, limit=None, details=False, category=None, owner=None,

@@ -475,8 +475,8 @@ class Analyzer(object):
             # If the analysis target is a file, we choose the package according
             # to the file format.
             if self.config.category == "file":
-                package = choose_package(self.config.file_type,
-                                         self.config.file_name)
+                ### JG: run with original filename, but with removed special chars
+                package = choose_package(self.config.file_type, self.config.filename)
             # If it's an URL, we'll just use the default Internet Explorer
             # package.
             else:
@@ -489,6 +489,8 @@ class Analyzer(object):
                                   "type: {0}".format(self.config.file_type))
 
             log.info("Automatically selected analysis package \"%s\"", package)
+            ### JG: write package back to config
+            self.config.package = package
         # Otherwise just select the specified package.
         else:
             package = self.config.package
@@ -517,6 +519,18 @@ class Analyzer(object):
         # Initialize the analysis package.
         package = package_class(self.config.options)
 
+        ### JG: maintain intial pid list in interactive mode and close monitoring if it is gone
+        initialPIDs = []
+
+        ### JG: disable timer if interactive command shell
+        if self.config.interaction != 0:
+            log.info("CMD spawn due to interactive mode (needs to be closed to terminate analysis)")
+            p = Process()
+            p.execute(path=os.path.join(os.environ['WINDIR'], "system32", "cmd.exe"), args="CloseMe", suspended=False)
+            initialPIDs.append(int(p.pid))
+            log.info("Added new process to list with pid: %s", p.pid)
+            skip_loops = 5
+
         # Move the sample to the current working directory as provided by the
         # task - one is able to override the starting path of the sample.
         # E.g., for some samples it might be useful to run from %APPDATA%
@@ -540,24 +554,26 @@ class Analyzer(object):
 
         # Walk through the available auxiliary modules.
         aux_enabled, aux_avail = [], []
-        for module in Auxiliary.__subclasses__():
-            # Try to start the auxiliary module.
-            try:
-                log.debug("Starting auxiliary module %s", module.__name__)
+        ### JG: disable auxiliary modules in case of interactive analysis
+        if self.config.interaction == 0:
+            for module in Auxiliary.__subclasses__():
+                # Try to start the auxiliary module.
+                try:
+                    log.debug("Starting auxiliary module %s", module.__name__)
 
-                aux = module(options=self.config.options, analyzer=self)
-                aux_avail.append(aux)
-                aux.start()
-            except (NotImplementedError, AttributeError):
-                log.warning("Auxiliary module %s was not implemented",
-                            aux.__class__.__name__)
-                continue
-            except Exception as e:
-                log.warning("Cannot execute auxiliary module %s: %s",
-                            aux.__class__.__name__, e)
-                continue
-            finally:
-                aux_enabled.append(aux)
+                    aux = module(options=self.config.options, analyzer=self)
+                    aux_avail.append(aux)
+                    aux.start()
+                except (NotImplementedError, AttributeError):
+                    log.warning("Auxiliary module %s was not implemented",
+                                aux.__class__.__name__)
+                    continue
+                except Exception as e:
+                    log.warning("Cannot execute auxiliary module %s: %s",
+                                aux.__class__.__name__, e)
+                    continue
+                finally:
+                    aux_enabled.append(aux)
 
         # Start analysis package. If for any reason, the execution of the
         # analysis package fails, we have to abort the analysis.
@@ -594,9 +610,15 @@ class Analyzer(object):
             log.info("Enabled timeout enforce, running for the full timeout.")
             pid_check = False
 
+        ### JG: flag that last minutes are running from reduced timer
+        wait_mode = True
+        wait_active = True
+        break_interactive = False
+
         while self.do_run:
             self.time_counter += 1
-            if self.time_counter == int(self.config.timeout):
+            ### JG: added interaction check
+            if self.time_counter >= int(self.config.timeout) and self.config.interaction == 0:
                 log.info("Analysis timeout hit, terminating analysis.")
                 break
 
@@ -608,6 +630,16 @@ class Analyzer(object):
                 continue
 
             try:
+                ### JG: in interactive mode check if initial pid was closed to terminate analysis
+                if self.config.interaction != 0 and skip_loops<=0:
+                    for pid in initialPIDs:
+                        if not Process(pid=pid).is_alive():
+                            log.info("Interactive Mode: initial PID terminated (%s) -> terminating analysis ..." % (pid))
+                            break_interactive = True
+                            break
+                elif self.config.interaction != 0 and skip_loops>0:
+                    skip_loops -= 1
+
                 # If the process monitor is enabled we start checking whether
                 # the monitored processes are still alive.
                 if pid_check:
@@ -615,18 +647,30 @@ class Analyzer(object):
                         if not Process(pid=pid).is_alive():
                             log.info("Process with pid %s has terminated", pid)
                             PROCESS_LIST.remove_pid(pid)
+                            log.info("%s" % (PROCESS_LIST))
 
                     # If none of the monitored processes are still alive, we
                     # can terminate the analysis.
-                    if not PROCESS_LIST.pids:
-                        log.info("Process list is empty, "
-                                 "terminating analysis.")
-                        break
+                    if len(PROCESS_LIST) == 0 and self.config.interaction == 0:
+                        ### JG: set timer to one minute (run analysis a little longer in case some process was injected that is not monitored)
+                        if wait_mode:
+                            if wait_active and int(self.config.timeout)>60:
+                                wait_active = False
+                                self.time_counter = int(self.config.timeout)-60
+                                log.info("wait another 60 seconds if something happens ...")
+                        else:
+                            log.info("Process list is empty, "
+                                     "terminating analysis.")
+                            break
 
                     # Update the list of monitored processes available to the
                     # analysis package. It could be used for internal
                     # operations within the module.
                     package.set_pids(PROCESS_LIST.pids)
+
+                ### JG: if break from interactive mode received
+                if break_interactive:
+                    break
 
                 try:
                     # The analysis packages are provided with a function that

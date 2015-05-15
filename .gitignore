@@ -7,6 +7,13 @@ log/*.log
 # Ignore Cuckoo analyses
 storage/*
 
+# Ignore Cuckoo conf
+conf/*
+*.conf
+*.old
+*.orig
+*.bak
+
 # Ignore Python byte code
 *.pyc
 

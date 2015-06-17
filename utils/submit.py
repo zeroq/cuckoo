@@ -48,7 +48,7 @@ def main():
     ### JG: added interaction and internet mode options and filename
     parser.add_argument("--interaction", type=int, action="store", default=0, help="Specify interaction level (0=automated, 1=interactive file, 2=command shell, 3=URL analysis)", required=False)
     parser.add_argument("--internet", type=int, action="store", default=0, help="Specify internet (emulated or NAT)", required=False)
-    parser.add_argument("--filename", type=str, action="store", default="", help="Specify a filename to be used for submitted file", required=False)
+    parser.add_argument("--filename", type=lambda s: unicode(s, 'utf8'), action="store", default="", help="Specify a filename to be used for submitted file", required=False)
 
     try:
         args = parser.parse_args()

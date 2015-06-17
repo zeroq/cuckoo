@@ -12,7 +12,7 @@ from lib.common.results import NetlogFile
 from lib.api.screenshot import Screenshot
 
 log = logging.getLogger(__name__)
-SHOT_DELAY = 10
+SHOT_DELAY = 5
 # Skip the following area when comparing screen shots.
 # Example for 800x600 screen resolution.
 # SKIP_AREA = ((735, 575), (790, 595))

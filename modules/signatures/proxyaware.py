@@ -26,6 +26,9 @@ class Persistence(Signature):
                 if reg_path.lower().endswith("software\\microsoft\\windows\\currentversion\\internet settings") and "MigrateProxy" in reg_keys and "1" in reg_values:
                     if {"reg_path" : reg_hive+'\\'+reg_path} not in self.data:
                         self.data.append({"reg_path" : reg_hive+'\\'+reg_path+'\\MigrateProxy -> "1"'})
+                elif reg_path.lower().endswith("software\\microsoft\\windows\\currentversion\\internet settings") and "ProxyEnable" in reg_keys:
+                    if {"reg_path" : reg_hive+'\\'+reg_path} not in self.data:
+                        self.data.append({"reg_path" : reg_hive+'\\'+reg_path+'\\ProxyEnable'})
         except StandardError as e:
             log.warning("proxyaware signature failed: %s" % (e))
             pass

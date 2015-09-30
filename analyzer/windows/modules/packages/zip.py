@@ -18,13 +18,16 @@ class Zip(Package):
         root = os.environ["TEMP"]
         password = self.options.get("password", None)
 
+        if password:
+            log.info("trying to unzip using password: %s" % (password))
+
         start_as = "sample.exe"
         with ZipFile(path, "r") as archive:
             try:
                 ### JG: added finding filename of executable in provided zip file
                 for item in archive.filelist:
                     fname = item.filename
-                    if fname.endswith('.exe') or fname.endswith('.bat') or fname.endswith('.com'):
+                    if fname.lower().endswith('.exe') or fname.lower().endswith('.bat') or fname.lower().endswith('.com'):
                         start_as = fname
                         break
             except StandardError as e:

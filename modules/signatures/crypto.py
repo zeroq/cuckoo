@@ -21,11 +21,11 @@ class Crypto(Signature):
             for item in self.results['behavior']['enhanced']:
                 if item['object'] == 'library' and 'data' in item:
                     if 'file' in item['data'] and item['data']['file'].lower() == 'cryptsp.dll':
-                        self.data.append({"library": item['data']['file'].lower()})
+                        self.data.append({"file_name": item['data']['file'].lower()})
                     if 'file' in item['data'] and item['data']['file'].lower() == 'cryptbase.dll':
-                        self.data.append({"library": item['data']['file'].lower()})
+                        self.data.append({"file_name": item['data']['file'].lower()})
                     if 'file' in item['data'] and item['data']['file'].lower() == 'crypt32.dll':
-                        self.data.append({"library": item['data']['file'].lower()})
+                        self.data.append({"file_name": item['data']['file'].lower()})
         except StandardError as e:
             log.warning("crypto signature failed: %s" % (e))
         if len(self.data)>0:
